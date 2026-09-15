@@ -1,10 +1,19 @@
 # Fantasy League Manager
 
-Repository: [github.com/E-stab21/Fantasy-League-Manager](https://github.com/E-stab21/Fantasy-League-Manager)
-
 Cloud Agents spawned from this repo act as an ESPN fantasy league manager. They use the unofficial ESPN fantasy API with your session cookies, then recommend lineups and waivers from public projections.
 
 The original Chrome draft helper still lives in `chrome_extension/`. Weekly league management is now the `league` CLI.
+
+## Repo vs Cursor environment
+
+These are two different things with different names on purpose:
+
+| | What it is | Where you see it | Name |
+| --- | --- | --- | --- |
+| **Repository** | Source code on GitHub | [github.com/E-stab21/Fantasy-League-Manager](https://github.com/E-stab21/Fantasy-League-Manager) | `Fantasy-League-Manager` |
+| **Cursor environment** | Cloud Agent VM (install, secrets, network access) | [Cursor dashboard → Environments](https://cursor.com/dashboard/cloud-agents/environments) | `League Manager Cloud Agents` |
+
+The environment name is set in `.cursor/environment.json`. After pulling this change, re-save the environment in the Cursor dashboard so the display name updates, and confirm the linked repo is `Fantasy-League-Manager` (not the old `Fantasy-Draft-Extension` redirect).
 
 ## What a spawned agent does
 

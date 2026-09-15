@@ -1,5 +1,5 @@
 {
-  "name": "Fantasy League Manager",
+  "name": "League Manager Cloud Agents",
   "install": "python3 -m pip install --user -e .",
   "egressAllowlist": [
     "lm-api-reads.fantasy.espn.com",
