@@ -1,0 +1,2482 @@
+{
+  "window": "bubble",
+  "filters": {
+    "min_surplus": 1.0,
+    "max_surplus": 16.0,
+    "min_their_face": -2.5,
+    "max_their_face": 8.0,
+    "min_their_lt": -18.0,
+    "max_their_lt": 16.0
+  },
+  "sample": {
+    "leagues_sampled": 100,
+    "player_trades": 53,
+    "graded_sides": 94,
+    "skipped_sides": 12,
+    "weeks": [
+      1
+    ],
+    "seasons": [
+      "2026"
+    ],
+    "league_types": {
+      "0": 30,
+      "2": 64
+    },
+    "note": "Valuation uses current Sleeper weekly/ROS projections as a proxy, not as-of-trade-date archives. Our ESPN league had 0 completed trades."
+  },
+  "cohorts": {
+    "all": {
+      "n_sides": 94,
+      "kinds": {
+        "1:1": 38,
+        "2:2": 18,
+        "1:2": 12,
+        "2:1": 12,
+        "3:1": 1,
+        "1:3": 1,
+        "1:4": 1,
+        "4:1": 1,
+        "2:3": 1,
+        "3:2": 1,
+        "3:3": 6,
+        "3:4": 1,
+        "4:3": 1
+      },
+      "verdicts": {
+        "accept": 44,
+        "reject": 46,
+        "lean_accept": 2,
+        "even": 1,
+        "lean_reject": 1
+      },
+      "blended_surplus": {
+        "n": 94,
+        "mean": -1.23,
+        "p10": -125.44,
+        "p25": -45.61,
+        "p50": 0.17,
+        "p75": 41.54,
+        "p90": 122.14
+      },
+      "their_face_net": {
+        "n": 94,
+        "mean": 0.0,
+        "p10": -196.86,
+        "p25": -79.05,
+        "p50": 0.51,
+        "p75": 75.82,
+        "p90": 172.55
+      },
+      "their_ros_vorp_net": {
+        "n": 94,
+        "mean": 0.0,
+        "p10": -220.98,
+        "p25": -79.86,
+        "p50": 2.41,
+        "p75": 69.67,
+        "p90": 211.49
+      },
+      "would_keep_in_our_search_pct": 2.1,
+      "paired_trades": {
+        "n": 47,
+        "both_sides_abs_blend_le_10_pct": 21.3,
+        "either_side_abs_blend_ge_20_pct": 70.2
+      },
+      "alt_filter_pass_pct": {
+        "current": 2.1,
+        "p25_p75_blend_face": 18.1,
+        "p10_p90_blend_face": 47.9,
+        "modest_plus_ev": 6.4
+      },
+      "examples_kept": [
+        {
+          "send": [
+            "Lamar Jackson",
+            "Tyler Allgeier"
+          ],
+          "receive": [
+            "Caleb Williams",
+            "Jonathon Brooks"
+          ],
+          "kind": "2:2",
+          "blended": 7.89,
+          "delta_st": 0.09,
+          "delta_lt": 15.7,
+          "verdict": "accept",
+          "their_espn_face_net": -0.51,
+          "their_ros_vorp_net": -15.7,
+          "would_keep_in_search": true,
+          "league_id": "1326696765621014528",
+          "league_name": "NFL 2022 Real Teams",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1345769959816450048"
+        },
+        {
+          "send": [
+            "Le'Veon Moss",
+            "Jaylen Warren"
+          ],
+          "receive": [
+            "Kaytron Allen",
+            "Rico Dowdle"
+          ],
+          "kind": "2:2",
+          "blended": 5.81,
+          "delta_st": 0.12,
+          "delta_lt": 11.5,
+          "verdict": "accept",
+          "their_espn_face_net": -0.68,
+          "their_ros_vorp_net": -11.5,
+          "would_keep_in_search": true,
+          "league_id": "1333694091279478784",
+          "league_name": "24 Fallout Dynasty",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1395307074757349376"
+        }
+      ],
+      "examples_near_even": [
+        {
+          "send": [
+            "Kenneth Walker"
+          ],
+          "receive": [
+            "Rashee Rice"
+          ],
+          "kind": "1:1",
+          "blended": 0.17,
+          "delta_st": -1.56,
+          "delta_lt": 7.41,
+          "verdict": "even",
+          "their_espn_face_net": 15.81,
+          "their_ros_vorp_net": -7.41,
+          "would_keep_in_search": false,
+          "league_id": "1312610694935371776",
+          "league_name": "Man Cave ",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1353799158871384064"
+        },
+        {
+          "send": [
+            "Patrick Mahomes"
+          ],
+          "receive": [
+            "Jaxson Dart"
+          ],
+          "kind": "1:1",
+          "blended": 2.43,
+          "delta_st": 11.19,
+          "delta_lt": -6.33,
+          "verdict": "lean_accept",
+          "their_espn_face_net": -63.41,
+          "their_ros_vorp_net": 6.33,
+          "would_keep_in_search": false,
+          "league_id": "1312541632268079104",
+          "league_name": "La Chainsaw Nostra",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1364071043328671744"
+        },
+        {
+          "send": [
+            "Jaxson Dart"
+          ],
+          "receive": [
+            "Patrick Mahomes"
+          ],
+          "kind": "1:1",
+          "blended": -2.43,
+          "delta_st": -11.19,
+          "delta_lt": 6.33,
+          "verdict": "lean_reject",
+          "their_espn_face_net": 63.41,
+          "their_ros_vorp_net": -6.33,
+          "would_keep_in_search": false,
+          "league_id": "1312541632268079104",
+          "league_name": "La Chainsaw Nostra",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1364071043328671744"
+        },
+        {
+          "send": [
+            "RJ Harvey"
+          ],
+          "receive": [
+            "Xavier Worthy"
+          ],
+          "kind": "1:1",
+          "blended": 2.88,
+          "delta_st": -2.49,
+          "delta_lt": 12.06,
+          "verdict": "lean_accept",
+          "their_espn_face_net": 21.08,
+          "their_ros_vorp_net": -12.06,
+          "would_keep_in_search": false,
+          "league_id": "1315757994436198400",
+          "league_name": "SF Devy",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1373331728629764096"
+        },
+        {
+          "send": [
+            "Xavier Worthy",
+            "Bryce Young"
+          ],
+          "receive": [
+            "Marvin Harrison"
+          ],
+          "kind": "2:1",
+          "blended": 4.17,
+          "delta_st": -0.69,
+          "delta_lt": 15.66,
+          "verdict": "accept",
+          "their_espn_face_net": 258.23,
+          "their_ros_vorp_net": -15.66,
+          "would_keep_in_search": false,
+          "league_id": "1393034653228634112",
+          "league_name": "Jesus Loves You",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1404817252817121280"
+        },
+        {
+          "send": [
+            "Wan'Dale Robinson"
+          ],
+          "receive": [
+            "KC Concepcion"
+          ],
+          "kind": "1:1",
+          "blended": -5.11,
+          "delta_st": -7.8,
+          "delta_lt": -2.41,
+          "verdict": "reject",
+          "their_espn_face_net": 44.2,
+          "their_ros_vorp_net": 2.41,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402833755877408768"
+        },
+        {
+          "send": [
+            "KC Concepcion"
+          ],
+          "receive": [
+            "Wan'Dale Robinson"
+          ],
+          "kind": "1:1",
+          "blended": 5.11,
+          "delta_st": 7.8,
+          "delta_lt": 2.41,
+          "verdict": "accept",
+          "their_espn_face_net": -44.2,
+          "their_ros_vorp_net": -2.41,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402833755877408768"
+        },
+        {
+          "send": [
+            "Rashee Rice"
+          ],
+          "receive": [
+            "Kenneth Walker"
+          ],
+          "kind": "1:1",
+          "blended": -5.48,
+          "delta_st": 1.56,
+          "delta_lt": -7.41,
+          "verdict": "reject",
+          "their_espn_face_net": -15.81,
+          "their_ros_vorp_net": 7.41,
+          "would_keep_in_search": false,
+          "league_id": "1312610694935371776",
+          "league_name": "Man Cave ",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1353799158871384064"
+        },
+        {
+          "send": [
+            "Kaytron Allen",
+            "Rico Dowdle"
+          ],
+          "receive": [
+            "Le'Veon Moss",
+            "Jaylen Warren"
+          ],
+          "kind": "2:2",
+          "blended": -5.81,
+          "delta_st": -0.12,
+          "delta_lt": -11.5,
+          "verdict": "reject",
+          "their_espn_face_net": 0.68,
+          "their_ros_vorp_net": 11.5,
+          "would_keep_in_search": false,
+          "league_id": "1333694091279478784",
+          "league_name": "24 Fallout Dynasty",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1395307074757349376"
+        },
+        {
+          "send": [
+            "Le'Veon Moss",
+            "Jaylen Warren"
+          ],
+          "receive": [
+            "Kaytron Allen",
+            "Rico Dowdle"
+          ],
+          "kind": "2:2",
+          "blended": 5.81,
+          "delta_st": 0.12,
+          "delta_lt": 11.5,
+          "verdict": "accept",
+          "their_espn_face_net": -0.68,
+          "their_ros_vorp_net": -11.5,
+          "would_keep_in_search": true,
+          "league_id": "1333694091279478784",
+          "league_name": "24 Fallout Dynasty",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1395307074757349376"
+        }
+      ],
+      "examples_smash": [
+        {
+          "send": [
+            "Tyler Shough"
+          ],
+          "receive": [
+            "Jacob Saylors",
+            "Oronde Gadsden"
+          ],
+          "kind": "1:2",
+          "blended": -234.51,
+          "delta_st": -72.57,
+          "delta_lt": -382.23,
+          "verdict": "reject",
+          "their_espn_face_net": 172.55,
+          "their_ros_vorp_net": 382.23,
+          "would_keep_in_search": false,
+          "league_id": "1326696765621014528",
+          "league_name": "NFL 2022 Real Teams",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1404034149752283136"
+        },
+        {
+          "send": [
+            "Jacob Saylors",
+            "Oronde Gadsden"
+          ],
+          "receive": [
+            "Tyler Shough"
+          ],
+          "kind": "2:1",
+          "blended": 227.36,
+          "delta_st": 72.57,
+          "delta_lt": 382.23,
+          "verdict": "accept",
+          "their_espn_face_net": -172.55,
+          "their_ros_vorp_net": -382.23,
+          "would_keep_in_search": false,
+          "league_id": "1326696765621014528",
+          "league_name": "NFL 2022 Real Teams",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1404034149752283136"
+        },
+        {
+          "send": [
+            "Rachaad White"
+          ],
+          "receive": [
+            "Michael Penix",
+            "Seth McGowan"
+          ],
+          "kind": "1:2",
+          "blended": -225.58,
+          "delta_st": -65.88,
+          "delta_lt": -385.28,
+          "verdict": "reject",
+          "their_espn_face_net": 119.0,
+          "their_ros_vorp_net": 385.28,
+          "would_keep_in_search": false,
+          "league_id": "1333694091279478784",
+          "league_name": "24 Fallout Dynasty",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1400649555380285440"
+        },
+        {
+          "send": [
+            "Michael Penix",
+            "Seth McGowan"
+          ],
+          "receive": [
+            "Rachaad White"
+          ],
+          "kind": "2:1",
+          "blended": 225.58,
+          "delta_st": 65.88,
+          "delta_lt": 385.28,
+          "verdict": "accept",
+          "their_espn_face_net": -119.0,
+          "their_ros_vorp_net": -385.28,
+          "would_keep_in_search": false,
+          "league_id": "1333694091279478784",
+          "league_name": "24 Fallout Dynasty",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1400649555380285440"
+        },
+        {
+          "send": [
+            "Chris Brazzell",
+            "Olamide Zaccheaus",
+            "Nico Collins"
+          ],
+          "receive": [
+            "Malik Nabers"
+          ],
+          "kind": "3:1",
+          "blended": 214.07,
+          "delta_st": 55.79,
+          "delta_lt": 372.34,
+          "verdict": "accept",
+          "their_espn_face_net": 154.87,
+          "their_ros_vorp_net": -372.34,
+          "would_keep_in_search": false,
+          "league_id": "1314845927944515584",
+          "league_name": "32 Man League #2",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1373863006307364864"
+        },
+        {
+          "send": [
+            "Malik Nabers"
+          ],
+          "receive": [
+            "Chris Brazzell",
+            "Olamide Zaccheaus",
+            "Nico Collins"
+          ],
+          "kind": "1:3",
+          "blended": -214.07,
+          "delta_st": -55.79,
+          "delta_lt": -372.34,
+          "verdict": "reject",
+          "their_espn_face_net": -154.87,
+          "their_ros_vorp_net": 372.34,
+          "would_keep_in_search": false,
+          "league_id": "1314845927944515584",
+          "league_name": "32 Man League #2",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1373863006307364864"
+        },
+        {
+          "send": [
+            "Jahmyr Gibbs"
+          ],
+          "receive": [
+            "Caleb Williams",
+            "Saquon Barkley",
+            "Tee Higgins",
+            "Tank Bigsby"
+          ],
+          "kind": "1:4",
+          "blended": -188.37,
+          "delta_st": -32.64,
+          "delta_lt": -300.94,
+          "verdict": "reject",
+          "their_espn_face_net": -580.21,
+          "their_ros_vorp_net": 300.94,
+          "would_keep_in_search": false,
+          "league_id": "1392568255280869376",
+          "league_name": "New Dreams Not Fancy SchemesWooHoo",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1394502267968704512"
+        },
+        {
+          "send": [
+            "Tre Tucker",
+            "Bhayshul Tuten",
+            "Darren Waller",
+            "Rico Dowdle"
+          ],
+          "receive": [
+            "Isaiah Bond",
+            "Jordyn Tyson",
+            "Tanner Koziol"
+          ],
+          "kind": "4:3",
+          "blended": -185.81,
+          "delta_st": -73.77,
+          "delta_lt": -288.6,
+          "verdict": "reject",
+          "their_espn_face_net": 683.91,
+          "their_ros_vorp_net": 288.6,
+          "would_keep_in_search": false,
+          "league_id": "1333694091279478784",
+          "league_name": "24 Fallout Dynasty",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1395214132319367168"
+        }
+      ]
+    },
+    "redraft_all_kinds": {
+      "n_sides": 30,
+      "kinds": {
+        "1:1": 16,
+        "2:2": 4,
+        "1:2": 3,
+        "2:1": 3,
+        "3:1": 1,
+        "1:3": 1,
+        "1:4": 1,
+        "4:1": 1
+      },
+      "verdicts": {
+        "accept": 15,
+        "reject": 15
+      },
+      "blended_surplus": {
+        "n": 30,
+        "mean": -1.4,
+        "p10": -162.46,
+        "p25": -26.74,
+        "p50": 4.17,
+        "p75": 19.35,
+        "p90": 148.89
+      },
+      "their_face_net": {
+        "n": 30,
+        "mean": 0.0,
+        "p10": -258.23,
+        "p25": -49.13,
+        "p50": 0.68,
+        "p75": 44.2,
+        "p90": 154.87
+      },
+      "their_ros_vorp_net": {
+        "n": 30,
+        "mean": 0.0,
+        "p10": -269.1,
+        "p25": -43.22,
+        "p50": 2.41,
+        "p75": 34.82,
+        "p90": 252.52
+      },
+      "would_keep_in_our_search_pct": 0.0,
+      "paired_trades": {
+        "n": 15,
+        "both_sides_abs_blend_le_10_pct": 26.7,
+        "either_side_abs_blend_ge_20_pct": 66.7
+      },
+      "alt_filter_pass_pct": {
+        "current": 0.0,
+        "p25_p75_blend_face": 20.0,
+        "p10_p90_blend_face": 60.0,
+        "modest_plus_ev": 6.7
+      },
+      "examples_kept": [],
+      "examples_near_even": [
+        {
+          "send": [
+            "Xavier Worthy",
+            "Bryce Young"
+          ],
+          "receive": [
+            "Marvin Harrison"
+          ],
+          "kind": "2:1",
+          "blended": 4.17,
+          "delta_st": -0.69,
+          "delta_lt": 15.66,
+          "verdict": "accept",
+          "their_espn_face_net": 258.23,
+          "their_ros_vorp_net": -15.66,
+          "would_keep_in_search": false,
+          "league_id": "1393034653228634112",
+          "league_name": "Jesus Loves You",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1404817252817121280"
+        },
+        {
+          "send": [
+            "Wan'Dale Robinson"
+          ],
+          "receive": [
+            "KC Concepcion"
+          ],
+          "kind": "1:1",
+          "blended": -5.11,
+          "delta_st": -7.8,
+          "delta_lt": -2.41,
+          "verdict": "reject",
+          "their_espn_face_net": 44.2,
+          "their_ros_vorp_net": 2.41,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402833755877408768"
+        },
+        {
+          "send": [
+            "KC Concepcion"
+          ],
+          "receive": [
+            "Wan'Dale Robinson"
+          ],
+          "kind": "1:1",
+          "blended": 5.11,
+          "delta_st": 7.8,
+          "delta_lt": 2.41,
+          "verdict": "accept",
+          "their_espn_face_net": -44.2,
+          "their_ros_vorp_net": -2.41,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402833755877408768"
+        },
+        {
+          "send": [
+            "Cooper Kupp"
+          ],
+          "receive": [
+            "Cade Otton"
+          ],
+          "kind": "1:1",
+          "blended": 6.71,
+          "delta_st": 3.99,
+          "delta_lt": 12.59,
+          "verdict": "accept",
+          "their_espn_face_net": -4.76,
+          "their_ros_vorp_net": -12.59,
+          "would_keep_in_search": false,
+          "league_id": "1389361780425261056",
+          "league_name": "CSC Fantasy Football LEGACY",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1401808356418547712"
+        },
+        {
+          "send": [
+            "Marvin Harrison"
+          ],
+          "receive": [
+            "Xavier Worthy",
+            "Bryce Young"
+          ],
+          "kind": "1:2",
+          "blended": -7.49,
+          "delta_st": 0.69,
+          "delta_lt": -15.66,
+          "verdict": "reject",
+          "their_espn_face_net": -258.23,
+          "their_ros_vorp_net": 15.66,
+          "would_keep_in_search": false,
+          "league_id": "1393034653228634112",
+          "league_name": "Jesus Loves You",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1404817252817121280"
+        },
+        {
+          "send": [
+            "Baker Mayfield"
+          ],
+          "receive": [
+            "Jared Goff"
+          ],
+          "kind": "1:1",
+          "blended": 9.57,
+          "delta_st": 0.12,
+          "delta_lt": 19.02,
+          "verdict": "accept",
+          "their_espn_face_net": -0.68,
+          "their_ros_vorp_net": -19.02,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1401795027495043072"
+        },
+        {
+          "send": [
+            "Jared Goff"
+          ],
+          "receive": [
+            "Baker Mayfield"
+          ],
+          "kind": "1:1",
+          "blended": -9.57,
+          "delta_st": -0.12,
+          "delta_lt": -19.02,
+          "verdict": "reject",
+          "their_espn_face_net": 0.68,
+          "their_ros_vorp_net": 19.02,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1401795027495043072"
+        },
+        {
+          "send": [
+            "Cade Otton"
+          ],
+          "receive": [
+            "Cooper Kupp"
+          ],
+          "kind": "1:1",
+          "blended": -9.93,
+          "delta_st": -3.99,
+          "delta_lt": -12.59,
+          "verdict": "reject",
+          "their_espn_face_net": 4.76,
+          "their_ros_vorp_net": 12.59,
+          "would_keep_in_search": false,
+          "league_id": "1389361780425261056",
+          "league_name": "CSC Fantasy Football LEGACY",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1401808356418547712"
+        },
+        {
+          "send": [
+            "Josh Allen",
+            "Garrett Wilson"
+          ],
+          "receive": [
+            "Jayden Daniels",
+            "Drake London"
+          ],
+          "kind": "2:2",
+          "blended": -11.69,
+          "delta_st": -8.67,
+          "delta_lt": -14.72,
+          "verdict": "reject",
+          "their_espn_face_net": 49.13,
+          "their_ros_vorp_net": 14.72,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402454557912489984"
+        },
+        {
+          "send": [
+            "Jayden Daniels",
+            "Drake London"
+          ],
+          "receive": [
+            "Josh Allen",
+            "Garrett Wilson"
+          ],
+          "kind": "2:2",
+          "blended": 11.69,
+          "delta_st": 8.67,
+          "delta_lt": 14.72,
+          "verdict": "accept",
+          "their_espn_face_net": -49.13,
+          "their_ros_vorp_net": -14.72,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402454557912489984"
+        }
+      ],
+      "examples_smash": [
+        {
+          "send": [
+            "Chris Brazzell",
+            "Olamide Zaccheaus",
+            "Nico Collins"
+          ],
+          "receive": [
+            "Malik Nabers"
+          ],
+          "kind": "3:1",
+          "blended": 214.07,
+          "delta_st": 55.79,
+          "delta_lt": 372.34,
+          "verdict": "accept",
+          "their_espn_face_net": 154.87,
+          "their_ros_vorp_net": -372.34,
+          "would_keep_in_search": false,
+          "league_id": "1314845927944515584",
+          "league_name": "32 Man League #2",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1373863006307364864"
+        },
+        {
+          "send": [
+            "Malik Nabers"
+          ],
+          "receive": [
+            "Chris Brazzell",
+            "Olamide Zaccheaus",
+            "Nico Collins"
+          ],
+          "kind": "1:3",
+          "blended": -214.07,
+          "delta_st": -55.79,
+          "delta_lt": -372.34,
+          "verdict": "reject",
+          "their_espn_face_net": -154.87,
+          "their_ros_vorp_net": 372.34,
+          "would_keep_in_search": false,
+          "league_id": "1314845927944515584",
+          "league_name": "32 Man League #2",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1373863006307364864"
+        },
+        {
+          "send": [
+            "Jahmyr Gibbs"
+          ],
+          "receive": [
+            "Caleb Williams",
+            "Saquon Barkley",
+            "Tee Higgins",
+            "Tank Bigsby"
+          ],
+          "kind": "1:4",
+          "blended": -188.37,
+          "delta_st": -32.64,
+          "delta_lt": -300.94,
+          "verdict": "reject",
+          "their_espn_face_net": -580.21,
+          "their_ros_vorp_net": 300.94,
+          "would_keep_in_search": false,
+          "league_id": "1392568255280869376",
+          "league_name": "New Dreams Not Fancy SchemesWooHoo",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1394502267968704512"
+        },
+        {
+          "send": [
+            "Caleb Williams",
+            "Saquon Barkley",
+            "Tee Higgins",
+            "Tank Bigsby"
+          ],
+          "receive": [
+            "Jahmyr Gibbs"
+          ],
+          "kind": "4:1",
+          "blended": 169.49,
+          "delta_st": 32.64,
+          "delta_lt": 300.94,
+          "verdict": "accept",
+          "their_espn_face_net": 580.21,
+          "their_ros_vorp_net": -300.94,
+          "would_keep_in_search": false,
+          "league_id": "1392568255280869376",
+          "league_name": "New Dreams Not Fancy SchemesWooHoo",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1394502267968704512"
+        },
+        {
+          "send": [
+            "Jaxson Dart"
+          ],
+          "receive": [
+            "Kaleb Johnson"
+          ],
+          "kind": "1:1",
+          "blended": -162.46,
+          "delta_st": -48.27,
+          "delta_lt": -269.1,
+          "verdict": "reject",
+          "their_espn_face_net": 268.94,
+          "their_ros_vorp_net": 269.1,
+          "would_keep_in_search": false,
+          "league_id": "1389393229878685696",
+          "league_name": "MCFL Fantasy ",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402771495641452544"
+        },
+        {
+          "send": [
+            "Kaleb Johnson"
+          ],
+          "receive": [
+            "Jaxson Dart"
+          ],
+          "kind": "1:1",
+          "blended": 158.07,
+          "delta_st": 48.27,
+          "delta_lt": 269.1,
+          "verdict": "accept",
+          "their_espn_face_net": -268.94,
+          "their_ros_vorp_net": -269.1,
+          "would_keep_in_search": false,
+          "league_id": "1389393229878685696",
+          "league_name": "MCFL Fantasy ",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402771495641452544"
+        },
+        {
+          "send": [
+            "Chris Olave"
+          ],
+          "receive": [
+            "Carnell Tate",
+            "Caleb Douglas"
+          ],
+          "kind": "1:2",
+          "blended": -148.94,
+          "delta_st": -45.18,
+          "delta_lt": -252.52,
+          "verdict": "reject",
+          "their_espn_face_net": 4.08,
+          "their_ros_vorp_net": 252.52,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402812106755014656"
+        },
+        {
+          "send": [
+            "Carnell Tate",
+            "Caleb Douglas"
+          ],
+          "receive": [
+            "Chris Olave"
+          ],
+          "kind": "2:1",
+          "blended": 148.89,
+          "delta_st": 45.18,
+          "delta_lt": 252.52,
+          "verdict": "accept",
+          "their_espn_face_net": -4.08,
+          "their_ros_vorp_net": -252.52,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402812106755014656"
+        }
+      ]
+    },
+    "redraft_our_kinds": {
+      "n_sides": 26,
+      "kinds": {
+        "1:1": 16,
+        "2:2": 4,
+        "1:2": 3,
+        "2:1": 3
+      },
+      "verdicts": {
+        "accept": 13,
+        "reject": 13
+      },
+      "blended_surplus": {
+        "n": 26,
+        "mean": -0.89,
+        "p10": -77.27,
+        "p25": -24.7,
+        "p50": 4.17,
+        "p75": 18.93,
+        "p90": 41.54
+      },
+      "their_face_net": {
+        "n": 26,
+        "mean": 0.0,
+        "p10": -119.34,
+        "p25": -44.2,
+        "p50": 0.68,
+        "p75": 43.69,
+        "p90": 71.06
+      },
+      "their_ros_vorp_net": {
+        "n": 26,
+        "mean": 0.0,
+        "p10": -129.92,
+        "p25": -34.82,
+        "p50": 2.41,
+        "p75": 34.46,
+        "p90": 79.86
+      },
+      "would_keep_in_our_search_pct": 0.0,
+      "paired_trades": {
+        "n": 13,
+        "both_sides_abs_blend_le_10_pct": 30.8,
+        "either_side_abs_blend_ge_20_pct": 61.5
+      },
+      "alt_filter_pass_pct": {
+        "current": 0.0,
+        "p25_p75_blend_face": 23.1,
+        "p10_p90_blend_face": 69.2,
+        "modest_plus_ev": 7.7
+      },
+      "examples_kept": [],
+      "examples_near_even": [
+        {
+          "send": [
+            "Xavier Worthy",
+            "Bryce Young"
+          ],
+          "receive": [
+            "Marvin Harrison"
+          ],
+          "kind": "2:1",
+          "blended": 4.17,
+          "delta_st": -0.69,
+          "delta_lt": 15.66,
+          "verdict": "accept",
+          "their_espn_face_net": 258.23,
+          "their_ros_vorp_net": -15.66,
+          "would_keep_in_search": false,
+          "league_id": "1393034653228634112",
+          "league_name": "Jesus Loves You",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1404817252817121280"
+        },
+        {
+          "send": [
+            "Wan'Dale Robinson"
+          ],
+          "receive": [
+            "KC Concepcion"
+          ],
+          "kind": "1:1",
+          "blended": -5.11,
+          "delta_st": -7.8,
+          "delta_lt": -2.41,
+          "verdict": "reject",
+          "their_espn_face_net": 44.2,
+          "their_ros_vorp_net": 2.41,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402833755877408768"
+        },
+        {
+          "send": [
+            "KC Concepcion"
+          ],
+          "receive": [
+            "Wan'Dale Robinson"
+          ],
+          "kind": "1:1",
+          "blended": 5.11,
+          "delta_st": 7.8,
+          "delta_lt": 2.41,
+          "verdict": "accept",
+          "their_espn_face_net": -44.2,
+          "their_ros_vorp_net": -2.41,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402833755877408768"
+        },
+        {
+          "send": [
+            "Cooper Kupp"
+          ],
+          "receive": [
+            "Cade Otton"
+          ],
+          "kind": "1:1",
+          "blended": 6.71,
+          "delta_st": 3.99,
+          "delta_lt": 12.59,
+          "verdict": "accept",
+          "their_espn_face_net": -4.76,
+          "their_ros_vorp_net": -12.59,
+          "would_keep_in_search": false,
+          "league_id": "1389361780425261056",
+          "league_name": "CSC Fantasy Football LEGACY",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1401808356418547712"
+        },
+        {
+          "send": [
+            "Marvin Harrison"
+          ],
+          "receive": [
+            "Xavier Worthy",
+            "Bryce Young"
+          ],
+          "kind": "1:2",
+          "blended": -7.49,
+          "delta_st": 0.69,
+          "delta_lt": -15.66,
+          "verdict": "reject",
+          "their_espn_face_net": -258.23,
+          "their_ros_vorp_net": 15.66,
+          "would_keep_in_search": false,
+          "league_id": "1393034653228634112",
+          "league_name": "Jesus Loves You",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1404817252817121280"
+        },
+        {
+          "send": [
+            "Baker Mayfield"
+          ],
+          "receive": [
+            "Jared Goff"
+          ],
+          "kind": "1:1",
+          "blended": 9.57,
+          "delta_st": 0.12,
+          "delta_lt": 19.02,
+          "verdict": "accept",
+          "their_espn_face_net": -0.68,
+          "their_ros_vorp_net": -19.02,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1401795027495043072"
+        },
+        {
+          "send": [
+            "Jared Goff"
+          ],
+          "receive": [
+            "Baker Mayfield"
+          ],
+          "kind": "1:1",
+          "blended": -9.57,
+          "delta_st": -0.12,
+          "delta_lt": -19.02,
+          "verdict": "reject",
+          "their_espn_face_net": 0.68,
+          "their_ros_vorp_net": 19.02,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1401795027495043072"
+        },
+        {
+          "send": [
+            "Cade Otton"
+          ],
+          "receive": [
+            "Cooper Kupp"
+          ],
+          "kind": "1:1",
+          "blended": -9.93,
+          "delta_st": -3.99,
+          "delta_lt": -12.59,
+          "verdict": "reject",
+          "their_espn_face_net": 4.76,
+          "their_ros_vorp_net": 12.59,
+          "would_keep_in_search": false,
+          "league_id": "1389361780425261056",
+          "league_name": "CSC Fantasy Football LEGACY",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1401808356418547712"
+        },
+        {
+          "send": [
+            "Josh Allen",
+            "Garrett Wilson"
+          ],
+          "receive": [
+            "Jayden Daniels",
+            "Drake London"
+          ],
+          "kind": "2:2",
+          "blended": -11.69,
+          "delta_st": -8.67,
+          "delta_lt": -14.72,
+          "verdict": "reject",
+          "their_espn_face_net": 49.13,
+          "their_ros_vorp_net": 14.72,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402454557912489984"
+        },
+        {
+          "send": [
+            "Jayden Daniels",
+            "Drake London"
+          ],
+          "receive": [
+            "Josh Allen",
+            "Garrett Wilson"
+          ],
+          "kind": "2:2",
+          "blended": 11.69,
+          "delta_st": 8.67,
+          "delta_lt": 14.72,
+          "verdict": "accept",
+          "their_espn_face_net": -49.13,
+          "their_ros_vorp_net": -14.72,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402454557912489984"
+        }
+      ],
+      "examples_smash": [
+        {
+          "send": [
+            "Jaxson Dart"
+          ],
+          "receive": [
+            "Kaleb Johnson"
+          ],
+          "kind": "1:1",
+          "blended": -162.46,
+          "delta_st": -48.27,
+          "delta_lt": -269.1,
+          "verdict": "reject",
+          "their_espn_face_net": 268.94,
+          "their_ros_vorp_net": 269.1,
+          "would_keep_in_search": false,
+          "league_id": "1389393229878685696",
+          "league_name": "MCFL Fantasy ",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402771495641452544"
+        },
+        {
+          "send": [
+            "Kaleb Johnson"
+          ],
+          "receive": [
+            "Jaxson Dart"
+          ],
+          "kind": "1:1",
+          "blended": 158.07,
+          "delta_st": 48.27,
+          "delta_lt": 269.1,
+          "verdict": "accept",
+          "their_espn_face_net": -268.94,
+          "their_ros_vorp_net": -269.1,
+          "would_keep_in_search": false,
+          "league_id": "1389393229878685696",
+          "league_name": "MCFL Fantasy ",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402771495641452544"
+        },
+        {
+          "send": [
+            "Chris Olave"
+          ],
+          "receive": [
+            "Carnell Tate",
+            "Caleb Douglas"
+          ],
+          "kind": "1:2",
+          "blended": -148.94,
+          "delta_st": -45.18,
+          "delta_lt": -252.52,
+          "verdict": "reject",
+          "their_espn_face_net": 4.08,
+          "their_ros_vorp_net": 252.52,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402812106755014656"
+        },
+        {
+          "send": [
+            "Carnell Tate",
+            "Caleb Douglas"
+          ],
+          "receive": [
+            "Chris Olave"
+          ],
+          "kind": "2:1",
+          "blended": 148.89,
+          "delta_st": 45.18,
+          "delta_lt": 252.52,
+          "verdict": "accept",
+          "their_espn_face_net": -4.08,
+          "their_ros_vorp_net": -252.52,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402812106755014656"
+        },
+        {
+          "send": [
+            "Christian Watson"
+          ],
+          "receive": [
+            "MarShawn Lloyd",
+            "Stefon Diggs"
+          ],
+          "kind": "1:2",
+          "blended": -77.27,
+          "delta_st": -24.63,
+          "delta_lt": -129.92,
+          "verdict": "reject",
+          "their_espn_face_net": -119.34,
+          "their_ros_vorp_net": 129.92,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402496437870182400"
+        },
+        {
+          "send": [
+            "MarShawn Lloyd",
+            "Stefon Diggs"
+          ],
+          "receive": [
+            "Christian Watson"
+          ],
+          "kind": "2:1",
+          "blended": 75.37,
+          "delta_st": 24.63,
+          "delta_lt": 129.92,
+          "verdict": "accept",
+          "their_espn_face_net": 119.34,
+          "their_ros_vorp_net": -129.92,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402496437870182400"
+        },
+        {
+          "send": [
+            "Tony Pollard",
+            "Drake London"
+          ],
+          "receive": [
+            "Mike Washington",
+            "Justin Jefferson"
+          ],
+          "kind": "2:2",
+          "blended": -41.54,
+          "delta_st": -3.21,
+          "delta_lt": -79.86,
+          "verdict": "reject",
+          "their_espn_face_net": 18.19,
+          "their_ros_vorp_net": 79.86,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1403468287874015232"
+        },
+        {
+          "send": [
+            "Mike Washington",
+            "Justin Jefferson"
+          ],
+          "receive": [
+            "Tony Pollard",
+            "Drake London"
+          ],
+          "kind": "2:2",
+          "blended": 41.54,
+          "delta_st": 3.21,
+          "delta_lt": 79.86,
+          "verdict": "accept",
+          "their_espn_face_net": -18.19,
+          "their_ros_vorp_net": -79.86,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1403468287874015232"
+        }
+      ]
+    },
+    "our_kinds_any_league": {
+      "n_sides": 80,
+      "kinds": {
+        "1:1": 38,
+        "2:2": 18,
+        "1:2": 12,
+        "2:1": 12
+      },
+      "verdicts": {
+        "accept": 37,
+        "reject": 39,
+        "lean_accept": 2,
+        "even": 1,
+        "lean_reject": 1
+      },
+      "blended_surplus": {
+        "n": 80,
+        "mean": -1.01,
+        "p10": -108.24,
+        "p25": -34.08,
+        "p50": 0.17,
+        "p75": 30.07,
+        "p90": 99.22
+      },
+      "their_face_net": {
+        "n": 80,
+        "mean": 0.0,
+        "p10": -196.86,
+        "p25": -75.82,
+        "p50": 0.51,
+        "p75": 71.06,
+        "p90": 172.55
+      },
+      "their_ros_vorp_net": {
+        "n": 80,
+        "mean": 0.0,
+        "p10": -185.56,
+        "p25": -59.43,
+        "p50": 2.41,
+        "p75": 45.76,
+        "p90": 161.13
+      },
+      "would_keep_in_our_search_pct": 2.5,
+      "paired_trades": {
+        "n": 40,
+        "both_sides_abs_blend_le_10_pct": 25.0,
+        "either_side_abs_blend_ge_20_pct": 65.0
+      },
+      "alt_filter_pass_pct": {
+        "current": 2.5,
+        "p25_p75_blend_face": 21.2,
+        "p10_p90_blend_face": 53.8,
+        "modest_plus_ev": 7.5
+      },
+      "examples_kept": [
+        {
+          "send": [
+            "Lamar Jackson",
+            "Tyler Allgeier"
+          ],
+          "receive": [
+            "Caleb Williams",
+            "Jonathon Brooks"
+          ],
+          "kind": "2:2",
+          "blended": 7.89,
+          "delta_st": 0.09,
+          "delta_lt": 15.7,
+          "verdict": "accept",
+          "their_espn_face_net": -0.51,
+          "their_ros_vorp_net": -15.7,
+          "would_keep_in_search": true,
+          "league_id": "1326696765621014528",
+          "league_name": "NFL 2022 Real Teams",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1345769959816450048"
+        },
+        {
+          "send": [
+            "Le'Veon Moss",
+            "Jaylen Warren"
+          ],
+          "receive": [
+            "Kaytron Allen",
+            "Rico Dowdle"
+          ],
+          "kind": "2:2",
+          "blended": 5.81,
+          "delta_st": 0.12,
+          "delta_lt": 11.5,
+          "verdict": "accept",
+          "their_espn_face_net": -0.68,
+          "their_ros_vorp_net": -11.5,
+          "would_keep_in_search": true,
+          "league_id": "1333694091279478784",
+          "league_name": "24 Fallout Dynasty",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1395307074757349376"
+        }
+      ],
+      "examples_near_even": [
+        {
+          "send": [
+            "Kenneth Walker"
+          ],
+          "receive": [
+            "Rashee Rice"
+          ],
+          "kind": "1:1",
+          "blended": 0.17,
+          "delta_st": -1.56,
+          "delta_lt": 7.41,
+          "verdict": "even",
+          "their_espn_face_net": 15.81,
+          "their_ros_vorp_net": -7.41,
+          "would_keep_in_search": false,
+          "league_id": "1312610694935371776",
+          "league_name": "Man Cave ",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1353799158871384064"
+        },
+        {
+          "send": [
+            "Patrick Mahomes"
+          ],
+          "receive": [
+            "Jaxson Dart"
+          ],
+          "kind": "1:1",
+          "blended": 2.43,
+          "delta_st": 11.19,
+          "delta_lt": -6.33,
+          "verdict": "lean_accept",
+          "their_espn_face_net": -63.41,
+          "their_ros_vorp_net": 6.33,
+          "would_keep_in_search": false,
+          "league_id": "1312541632268079104",
+          "league_name": "La Chainsaw Nostra",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1364071043328671744"
+        },
+        {
+          "send": [
+            "Jaxson Dart"
+          ],
+          "receive": [
+            "Patrick Mahomes"
+          ],
+          "kind": "1:1",
+          "blended": -2.43,
+          "delta_st": -11.19,
+          "delta_lt": 6.33,
+          "verdict": "lean_reject",
+          "their_espn_face_net": 63.41,
+          "their_ros_vorp_net": -6.33,
+          "would_keep_in_search": false,
+          "league_id": "1312541632268079104",
+          "league_name": "La Chainsaw Nostra",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1364071043328671744"
+        },
+        {
+          "send": [
+            "RJ Harvey"
+          ],
+          "receive": [
+            "Xavier Worthy"
+          ],
+          "kind": "1:1",
+          "blended": 2.88,
+          "delta_st": -2.49,
+          "delta_lt": 12.06,
+          "verdict": "lean_accept",
+          "their_espn_face_net": 21.08,
+          "their_ros_vorp_net": -12.06,
+          "would_keep_in_search": false,
+          "league_id": "1315757994436198400",
+          "league_name": "SF Devy",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1373331728629764096"
+        },
+        {
+          "send": [
+            "Xavier Worthy",
+            "Bryce Young"
+          ],
+          "receive": [
+            "Marvin Harrison"
+          ],
+          "kind": "2:1",
+          "blended": 4.17,
+          "delta_st": -0.69,
+          "delta_lt": 15.66,
+          "verdict": "accept",
+          "their_espn_face_net": 258.23,
+          "their_ros_vorp_net": -15.66,
+          "would_keep_in_search": false,
+          "league_id": "1393034653228634112",
+          "league_name": "Jesus Loves You",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1404817252817121280"
+        },
+        {
+          "send": [
+            "Wan'Dale Robinson"
+          ],
+          "receive": [
+            "KC Concepcion"
+          ],
+          "kind": "1:1",
+          "blended": -5.11,
+          "delta_st": -7.8,
+          "delta_lt": -2.41,
+          "verdict": "reject",
+          "their_espn_face_net": 44.2,
+          "their_ros_vorp_net": 2.41,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402833755877408768"
+        },
+        {
+          "send": [
+            "KC Concepcion"
+          ],
+          "receive": [
+            "Wan'Dale Robinson"
+          ],
+          "kind": "1:1",
+          "blended": 5.11,
+          "delta_st": 7.8,
+          "delta_lt": 2.41,
+          "verdict": "accept",
+          "their_espn_face_net": -44.2,
+          "their_ros_vorp_net": -2.41,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402833755877408768"
+        },
+        {
+          "send": [
+            "Rashee Rice"
+          ],
+          "receive": [
+            "Kenneth Walker"
+          ],
+          "kind": "1:1",
+          "blended": -5.48,
+          "delta_st": 1.56,
+          "delta_lt": -7.41,
+          "verdict": "reject",
+          "their_espn_face_net": -15.81,
+          "their_ros_vorp_net": 7.41,
+          "would_keep_in_search": false,
+          "league_id": "1312610694935371776",
+          "league_name": "Man Cave ",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1353799158871384064"
+        },
+        {
+          "send": [
+            "Kaytron Allen",
+            "Rico Dowdle"
+          ],
+          "receive": [
+            "Le'Veon Moss",
+            "Jaylen Warren"
+          ],
+          "kind": "2:2",
+          "blended": -5.81,
+          "delta_st": -0.12,
+          "delta_lt": -11.5,
+          "verdict": "reject",
+          "their_espn_face_net": 0.68,
+          "their_ros_vorp_net": 11.5,
+          "would_keep_in_search": false,
+          "league_id": "1333694091279478784",
+          "league_name": "24 Fallout Dynasty",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1395307074757349376"
+        },
+        {
+          "send": [
+            "Le'Veon Moss",
+            "Jaylen Warren"
+          ],
+          "receive": [
+            "Kaytron Allen",
+            "Rico Dowdle"
+          ],
+          "kind": "2:2",
+          "blended": 5.81,
+          "delta_st": 0.12,
+          "delta_lt": 11.5,
+          "verdict": "accept",
+          "their_espn_face_net": -0.68,
+          "their_ros_vorp_net": -11.5,
+          "would_keep_in_search": true,
+          "league_id": "1333694091279478784",
+          "league_name": "24 Fallout Dynasty",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1395307074757349376"
+        }
+      ],
+      "examples_smash": [
+        {
+          "send": [
+            "Tyler Shough"
+          ],
+          "receive": [
+            "Jacob Saylors",
+            "Oronde Gadsden"
+          ],
+          "kind": "1:2",
+          "blended": -234.51,
+          "delta_st": -72.57,
+          "delta_lt": -382.23,
+          "verdict": "reject",
+          "their_espn_face_net": 172.55,
+          "their_ros_vorp_net": 382.23,
+          "would_keep_in_search": false,
+          "league_id": "1326696765621014528",
+          "league_name": "NFL 2022 Real Teams",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1404034149752283136"
+        },
+        {
+          "send": [
+            "Jacob Saylors",
+            "Oronde Gadsden"
+          ],
+          "receive": [
+            "Tyler Shough"
+          ],
+          "kind": "2:1",
+          "blended": 227.36,
+          "delta_st": 72.57,
+          "delta_lt": 382.23,
+          "verdict": "accept",
+          "their_espn_face_net": -172.55,
+          "their_ros_vorp_net": -382.23,
+          "would_keep_in_search": false,
+          "league_id": "1326696765621014528",
+          "league_name": "NFL 2022 Real Teams",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1404034149752283136"
+        },
+        {
+          "send": [
+            "Rachaad White"
+          ],
+          "receive": [
+            "Michael Penix",
+            "Seth McGowan"
+          ],
+          "kind": "1:2",
+          "blended": -225.58,
+          "delta_st": -65.88,
+          "delta_lt": -385.28,
+          "verdict": "reject",
+          "their_espn_face_net": 119.0,
+          "their_ros_vorp_net": 385.28,
+          "would_keep_in_search": false,
+          "league_id": "1333694091279478784",
+          "league_name": "24 Fallout Dynasty",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1400649555380285440"
+        },
+        {
+          "send": [
+            "Michael Penix",
+            "Seth McGowan"
+          ],
+          "receive": [
+            "Rachaad White"
+          ],
+          "kind": "2:1",
+          "blended": 225.58,
+          "delta_st": 65.88,
+          "delta_lt": 385.28,
+          "verdict": "accept",
+          "their_espn_face_net": -119.0,
+          "their_ros_vorp_net": -385.28,
+          "would_keep_in_search": false,
+          "league_id": "1333694091279478784",
+          "league_name": "24 Fallout Dynasty",
+          "league_type": 2,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1400649555380285440"
+        },
+        {
+          "send": [
+            "Jaxson Dart"
+          ],
+          "receive": [
+            "Kaleb Johnson"
+          ],
+          "kind": "1:1",
+          "blended": -162.46,
+          "delta_st": -48.27,
+          "delta_lt": -269.1,
+          "verdict": "reject",
+          "their_espn_face_net": 268.94,
+          "their_ros_vorp_net": 269.1,
+          "would_keep_in_search": false,
+          "league_id": "1389393229878685696",
+          "league_name": "MCFL Fantasy ",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402771495641452544"
+        },
+        {
+          "send": [
+            "Kaleb Johnson"
+          ],
+          "receive": [
+            "Jaxson Dart"
+          ],
+          "kind": "1:1",
+          "blended": 158.07,
+          "delta_st": 48.27,
+          "delta_lt": 269.1,
+          "verdict": "accept",
+          "their_espn_face_net": -268.94,
+          "their_ros_vorp_net": -269.1,
+          "would_keep_in_search": false,
+          "league_id": "1389393229878685696",
+          "league_name": "MCFL Fantasy ",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402771495641452544"
+        },
+        {
+          "send": [
+            "Chris Olave"
+          ],
+          "receive": [
+            "Carnell Tate",
+            "Caleb Douglas"
+          ],
+          "kind": "1:2",
+          "blended": -148.94,
+          "delta_st": -45.18,
+          "delta_lt": -252.52,
+          "verdict": "reject",
+          "their_espn_face_net": 4.08,
+          "their_ros_vorp_net": 252.52,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402812106755014656"
+        },
+        {
+          "send": [
+            "Carnell Tate",
+            "Caleb Douglas"
+          ],
+          "receive": [
+            "Chris Olave"
+          ],
+          "kind": "2:1",
+          "blended": 148.89,
+          "delta_st": 45.18,
+          "delta_lt": 252.52,
+          "verdict": "accept",
+          "their_espn_face_net": -4.08,
+          "their_ros_vorp_net": -252.52,
+          "would_keep_in_search": false,
+          "league_id": "1369342394830422016",
+          "league_name": "Port City",
+          "league_type": 0,
+          "season": "2026",
+          "week": 1,
+          "transaction_id": "1402812106755014656"
+        }
+      ]
+    }
+  },
+  "kinds": {
+    "1:1": 38,
+    "2:2": 18,
+    "1:2": 12,
+    "2:1": 12,
+    "3:1": 1,
+    "1:3": 1,
+    "1:4": 1,
+    "4:1": 1,
+    "2:3": 1,
+    "3:2": 1,
+    "3:3": 6,
+    "3:4": 1,
+    "4:3": 1
+  },
+  "verdicts": {
+    "accept": 44,
+    "reject": 46,
+    "lean_accept": 2,
+    "even": 1,
+    "lean_reject": 1
+  },
+  "blended_surplus": {
+    "n": 94,
+    "mean": -1.23,
+    "p10": -125.44,
+    "p25": -45.61,
+    "p50": 0.17,
+    "p75": 41.54,
+    "p90": 122.14
+  },
+  "their_face_net": {
+    "n": 94,
+    "mean": 0.0,
+    "p10": -196.86,
+    "p25": -79.05,
+    "p50": 0.51,
+    "p75": 75.82,
+    "p90": 172.55
+  },
+  "would_keep_in_our_search_pct": 2.1,
+  "paired_trades": {
+    "n": 47,
+    "both_sides_abs_blend_le_10_pct": 21.3,
+    "either_side_abs_blend_ge_20_pct": 70.2
+  },
+  "examples_kept": [
+    {
+      "send": [
+        "Lamar Jackson",
+        "Tyler Allgeier"
+      ],
+      "receive": [
+        "Caleb Williams",
+        "Jonathon Brooks"
+      ],
+      "kind": "2:2",
+      "blended": 7.89,
+      "delta_st": 0.09,
+      "delta_lt": 15.7,
+      "verdict": "accept",
+      "their_espn_face_net": -0.51,
+      "their_ros_vorp_net": -15.7,
+      "would_keep_in_search": true,
+      "league_id": "1326696765621014528",
+      "league_name": "NFL 2022 Real Teams",
+      "league_type": 2,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1345769959816450048"
+    },
+    {
+      "send": [
+        "Le'Veon Moss",
+        "Jaylen Warren"
+      ],
+      "receive": [
+        "Kaytron Allen",
+        "Rico Dowdle"
+      ],
+      "kind": "2:2",
+      "blended": 5.81,
+      "delta_st": 0.12,
+      "delta_lt": 11.5,
+      "verdict": "accept",
+      "their_espn_face_net": -0.68,
+      "their_ros_vorp_net": -11.5,
+      "would_keep_in_search": true,
+      "league_id": "1333694091279478784",
+      "league_name": "24 Fallout Dynasty",
+      "league_type": 2,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1395307074757349376"
+    }
+  ],
+  "examples_rejected_by_filters": [
+    {
+      "send": [
+        "Tyler Shough"
+      ],
+      "receive": [
+        "Jacob Saylors",
+        "Oronde Gadsden"
+      ],
+      "kind": "1:2",
+      "blended": -234.51,
+      "delta_st": -72.57,
+      "delta_lt": -382.23,
+      "verdict": "reject",
+      "their_espn_face_net": 172.55,
+      "their_ros_vorp_net": 382.23,
+      "would_keep_in_search": false,
+      "league_id": "1326696765621014528",
+      "league_name": "NFL 2022 Real Teams",
+      "league_type": 2,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1404034149752283136"
+    },
+    {
+      "send": [
+        "Jacob Saylors",
+        "Oronde Gadsden"
+      ],
+      "receive": [
+        "Tyler Shough"
+      ],
+      "kind": "2:1",
+      "blended": 227.36,
+      "delta_st": 72.57,
+      "delta_lt": 382.23,
+      "verdict": "accept",
+      "their_espn_face_net": -172.55,
+      "their_ros_vorp_net": -382.23,
+      "would_keep_in_search": false,
+      "league_id": "1326696765621014528",
+      "league_name": "NFL 2022 Real Teams",
+      "league_type": 2,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1404034149752283136"
+    },
+    {
+      "send": [
+        "Rachaad White"
+      ],
+      "receive": [
+        "Michael Penix",
+        "Seth McGowan"
+      ],
+      "kind": "1:2",
+      "blended": -225.58,
+      "delta_st": -65.88,
+      "delta_lt": -385.28,
+      "verdict": "reject",
+      "their_espn_face_net": 119.0,
+      "their_ros_vorp_net": 385.28,
+      "would_keep_in_search": false,
+      "league_id": "1333694091279478784",
+      "league_name": "24 Fallout Dynasty",
+      "league_type": 2,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1400649555380285440"
+    },
+    {
+      "send": [
+        "Michael Penix",
+        "Seth McGowan"
+      ],
+      "receive": [
+        "Rachaad White"
+      ],
+      "kind": "2:1",
+      "blended": 225.58,
+      "delta_st": 65.88,
+      "delta_lt": 385.28,
+      "verdict": "accept",
+      "their_espn_face_net": -119.0,
+      "their_ros_vorp_net": -385.28,
+      "would_keep_in_search": false,
+      "league_id": "1333694091279478784",
+      "league_name": "24 Fallout Dynasty",
+      "league_type": 2,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1400649555380285440"
+    },
+    {
+      "send": [
+        "Chris Brazzell",
+        "Olamide Zaccheaus",
+        "Nico Collins"
+      ],
+      "receive": [
+        "Malik Nabers"
+      ],
+      "kind": "3:1",
+      "blended": 214.07,
+      "delta_st": 55.79,
+      "delta_lt": 372.34,
+      "verdict": "accept",
+      "their_espn_face_net": 154.87,
+      "their_ros_vorp_net": -372.34,
+      "would_keep_in_search": false,
+      "league_id": "1314845927944515584",
+      "league_name": "32 Man League #2",
+      "league_type": 0,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1373863006307364864"
+    },
+    {
+      "send": [
+        "Malik Nabers"
+      ],
+      "receive": [
+        "Chris Brazzell",
+        "Olamide Zaccheaus",
+        "Nico Collins"
+      ],
+      "kind": "1:3",
+      "blended": -214.07,
+      "delta_st": -55.79,
+      "delta_lt": -372.34,
+      "verdict": "reject",
+      "their_espn_face_net": -154.87,
+      "their_ros_vorp_net": 372.34,
+      "would_keep_in_search": false,
+      "league_id": "1314845927944515584",
+      "league_name": "32 Man League #2",
+      "league_type": 0,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1373863006307364864"
+    },
+    {
+      "send": [
+        "Jahmyr Gibbs"
+      ],
+      "receive": [
+        "Caleb Williams",
+        "Saquon Barkley",
+        "Tee Higgins",
+        "Tank Bigsby"
+      ],
+      "kind": "1:4",
+      "blended": -188.37,
+      "delta_st": -32.64,
+      "delta_lt": -300.94,
+      "verdict": "reject",
+      "their_espn_face_net": -580.21,
+      "their_ros_vorp_net": 300.94,
+      "would_keep_in_search": false,
+      "league_id": "1392568255280869376",
+      "league_name": "New Dreams Not Fancy SchemesWooHoo",
+      "league_type": 0,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1394502267968704512"
+    },
+    {
+      "send": [
+        "Tre Tucker",
+        "Bhayshul Tuten",
+        "Darren Waller",
+        "Rico Dowdle"
+      ],
+      "receive": [
+        "Isaiah Bond",
+        "Jordyn Tyson",
+        "Tanner Koziol"
+      ],
+      "kind": "4:3",
+      "blended": -185.81,
+      "delta_st": -73.77,
+      "delta_lt": -288.6,
+      "verdict": "reject",
+      "their_espn_face_net": 683.91,
+      "their_ros_vorp_net": 288.6,
+      "would_keep_in_search": false,
+      "league_id": "1333694091279478784",
+      "league_name": "24 Fallout Dynasty",
+      "league_type": 2,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1395214132319367168"
+    },
+    {
+      "send": [
+        "Isaiah Bond",
+        "Jordyn Tyson",
+        "Tanner Koziol"
+      ],
+      "receive": [
+        "Tre Tucker",
+        "Bhayshul Tuten",
+        "Darren Waller",
+        "Rico Dowdle"
+      ],
+      "kind": "3:4",
+      "blended": 181.19,
+      "delta_st": 73.77,
+      "delta_lt": 288.6,
+      "verdict": "accept",
+      "their_espn_face_net": -683.91,
+      "their_ros_vorp_net": -288.6,
+      "would_keep_in_search": false,
+      "league_id": "1333694091279478784",
+      "league_name": "24 Fallout Dynasty",
+      "league_type": 2,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1395214132319367168"
+    },
+    {
+      "send": [
+        "Caleb Williams",
+        "Saquon Barkley",
+        "Tee Higgins",
+        "Tank Bigsby"
+      ],
+      "receive": [
+        "Jahmyr Gibbs"
+      ],
+      "kind": "4:1",
+      "blended": 169.49,
+      "delta_st": 32.64,
+      "delta_lt": 300.94,
+      "verdict": "accept",
+      "their_espn_face_net": 580.21,
+      "their_ros_vorp_net": -300.94,
+      "would_keep_in_search": false,
+      "league_id": "1392568255280869376",
+      "league_name": "New Dreams Not Fancy SchemesWooHoo",
+      "league_type": 0,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1394502267968704512"
+    },
+    {
+      "send": [
+        "Jaxson Dart"
+      ],
+      "receive": [
+        "Kaleb Johnson"
+      ],
+      "kind": "1:1",
+      "blended": -162.46,
+      "delta_st": -48.27,
+      "delta_lt": -269.1,
+      "verdict": "reject",
+      "their_espn_face_net": 268.94,
+      "their_ros_vorp_net": 269.1,
+      "would_keep_in_search": false,
+      "league_id": "1389393229878685696",
+      "league_name": "MCFL Fantasy ",
+      "league_type": 0,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1402771495641452544"
+    },
+    {
+      "send": [
+        "Kaleb Johnson"
+      ],
+      "receive": [
+        "Jaxson Dart"
+      ],
+      "kind": "1:1",
+      "blended": 158.07,
+      "delta_st": 48.27,
+      "delta_lt": 269.1,
+      "verdict": "accept",
+      "their_espn_face_net": -268.94,
+      "their_ros_vorp_net": -269.1,
+      "would_keep_in_search": false,
+      "league_id": "1389393229878685696",
+      "league_name": "MCFL Fantasy ",
+      "league_type": 0,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1402771495641452544"
+    },
+    {
+      "send": [
+        "Mike Gesicki",
+        "Tee Higgins"
+      ],
+      "receive": [
+        "Jonathon Brooks",
+        "Ja'Tavion Sanders",
+        "Jalen Coker"
+      ],
+      "kind": "2:3",
+      "blended": -151.65,
+      "delta_st": -48.63,
+      "delta_lt": -254.67,
+      "verdict": "reject",
+      "their_espn_face_net": 16.66,
+      "their_ros_vorp_net": 254.67,
+      "would_keep_in_search": false,
+      "league_id": "1355911007158935552",
+      "league_name": "Real League Kings (RLK)",
+      "league_type": 2,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1357163252781453312"
+    },
+    {
+      "send": [
+        "Jonathon Brooks",
+        "Ja'Tavion Sanders",
+        "Jalen Coker"
+      ],
+      "receive": [
+        "Mike Gesicki",
+        "Tee Higgins"
+      ],
+      "kind": "3:2",
+      "blended": 149.67,
+      "delta_st": 48.63,
+      "delta_lt": 254.67,
+      "verdict": "accept",
+      "their_espn_face_net": -16.66,
+      "their_ros_vorp_net": -254.67,
+      "would_keep_in_search": false,
+      "league_id": "1355911007158935552",
+      "league_name": "Real League Kings (RLK)",
+      "league_type": 2,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1357163252781453312"
+    },
+    {
+      "send": [
+        "Chris Olave"
+      ],
+      "receive": [
+        "Carnell Tate",
+        "Caleb Douglas"
+      ],
+      "kind": "1:2",
+      "blended": -148.94,
+      "delta_st": -45.18,
+      "delta_lt": -252.52,
+      "verdict": "reject",
+      "their_espn_face_net": 4.08,
+      "their_ros_vorp_net": 252.52,
+      "would_keep_in_search": false,
+      "league_id": "1369342394830422016",
+      "league_name": "Port City",
+      "league_type": 0,
+      "season": "2026",
+      "week": 1,
+      "transaction_id": "1402812106755014656"
+    }
+  ]
+}

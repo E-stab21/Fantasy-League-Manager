@@ -1,8 +1,9 @@
 """Blend ESPN league-adjusted projections with public second sources.
 
 Recommendation (see docs/PREDICTION_MODELS.md): do not train a custom model
-first. Use ESPN projections as the primary source because they already apply
-this league's scoring. Overlay Sleeper weekly projections when available.
+first. Start/sit averages ESPN this-week and Sleeper this-week when both
+exist. Trade ROS defaults to Sleeper remaining-week sums (FantasyPros first
+when a key is set).
 """
 
 from __future__ import annotations
@@ -112,12 +113,35 @@ def league_scoring(league: Any | None) -> str:
     return "ppr"
 
 
+def _as_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def primary_projection(player: dict[str, Any]) -> float:
-    for key in ("projected_points", "sleeper_projected_points", "points"):
-        value = player.get(key)
-        if value is not None:
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                continue
-    return 0.0
+    """Start/sit score: average ESPN + Sleeper when both exist, else whichever does."""
+    espn = _as_float(player.get("projected_points"))
+    sleeper = _as_float(player.get("sleeper_projected_points"))
+    if espn is not None and sleeper is not None:
+        return round((espn + sleeper) / 2.0, 2)
+    if espn is not None:
+        return espn
+    if sleeper is not None:
+        return sleeper
+    return _as_float(player.get("points")) or 0.0
+
+
+def projection_source(player: dict[str, Any]) -> str:
+    espn = _as_float(player.get("projected_points"))
+    sleeper = _as_float(player.get("sleeper_projected_points"))
+    if espn is not None and sleeper is not None:
+        return "espn_sleeper_avg"
+    if espn is not None:
+        return "espn"
+    if sleeper is not None:
+        return "sleeper"
+    return "points"

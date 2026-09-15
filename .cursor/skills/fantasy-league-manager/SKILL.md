@@ -33,17 +33,25 @@ python3 -m league_manager waiver-advice
 python3 -m league_manager values
 ```
 
-Add `--sleeper` when you want a second projection source.
+Sleeper is on by default for start/sit (averaged with ESPN) and for trade ROS. Use `--no-sleeper` to force ESPN-only.
 
 ## Trades (redraft)
 
 ```bash
-python3 -m league_manager values --window auto --sleeper
-python3 -m league_manager trade-search --sleeper
-python3 -m league_manager trade-grade --send 111,222 --receive 333 --sleeper
+python3 -m league_manager values --window auto
+python3 -m league_manager trade-search
+python3 -m league_manager trade-grade --send 111,222 --receive 333
 ```
 
-`--window` can be `auto`, `contender`, `bubble`, or `rebuilder`. Auto uses record and standings. ST is the next `--horizon` weeks (default 3). LT prefers FantasyPros ROS, Sleeper remaining weeks, or ESPN season remainder over flattening this week. `trade-search` walks 1:1 / 2:1 / 1:2 against every roster and keeps packages that are +EV for us and close on ESPN face value. Grade before proposing; `league trade` attaches the same grade on preview.
+`--window` can be `auto`, `contender`, `bubble`, or `rebuilder`. Auto uses record and standings. ST is the next `--horizon` weeks (default 3). LT prefers FantasyPros ROS, Sleeper remaining weeks (default), or ESPN season remainder over flattening this week. `trade-search` walks 1:1 / 2:1 / 1:2 / 2:2 against every roster and keeps packages inside a realism band (default blended ~1–40; `trade-calibrate --apply` can raise the top). Grades mix **roster VORP** and **lineup surplus** (optimal start/sit before vs after). Accepted public trades set the band only — they do **not** change VORP pricing. Grade before proposing; `league trade` attaches the same grade on preview.
+
+```bash
+python3 -m league_manager trade-calibrate
+python3 -m league_manager trade-calibrate --apply
+```
+
+Comparable redraft Sleeper accepts (skips dynasty / superflex-mismatch / best-ball). Reports whether to shift the top band and roster demand/supply comps for talk tracks.
+
 
 ```bash
 python3 -m league_manager opportunities
@@ -65,4 +73,4 @@ Submit only when the user says to execute, then add `--confirm`. Live posts also
 
 ## Projections
 
-Do not train a model unless asked. Start/sit uses ESPN this-week projections. Trade ROS uses FantasyPros (official API + `FANTASYPROS_API_KEY` only — do not scrape), Sleeper remaining weeks (`--sleeper`), or ESPN season projection minus points scored. Research notes live in `docs/PREDICTION_MODELS.md`.
+Do not train a model unless asked. Start/sit averages ESPN + Sleeper this-week projections. Trade ROS defaults to Sleeper remaining weeks (FantasyPros first if `FANTASYPROS_API_KEY` is set), then ESPN season projection minus points scored. Research notes live in `docs/PREDICTION_MODELS.md`.

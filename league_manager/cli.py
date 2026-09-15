@@ -11,10 +11,39 @@ from league_manager.advise import optimal_lineup, waiver_targets
 from league_manager.config import ConfigError, auth_status, load_settings
 from league_manager.espn_client import EspnClient
 from league_manager.market import DEFAULT_LOOKBACK
-from league_manager.projections import attach_sleeper_projections
+from league_manager.projections import attach_sleeper_projections, league_scoring
 from league_manager.slots import parse_slot
 from league_manager.value import DEFAULT_SHORT_TERM_WEEKS
 from league_manager.writes import add_drop_payload, lineup_payload, trade_payload
+
+
+def _add_sleeper_flag(
+    parser: argparse.ArgumentParser,
+    *,
+    help_text: str,
+    default: bool = True,
+) -> None:
+    parser.add_argument(
+        "--sleeper",
+        action=argparse.BooleanOptionalAction,
+        default=default,
+        help=help_text,
+    )
+
+
+def _attach_sleeper_week(
+    players: list[dict[str, Any]],
+    client: EspnClient,
+) -> list[dict[str, Any]]:
+    try:
+        return attach_sleeper_projections(
+            players,
+            season=client.settings.season,
+            week=getattr(client.league, "current_week", None),
+            scoring=league_scoring(client.league),
+        )
+    except Exception:
+        return players
 
 
 def _print(data: Any, fmt: str) -> int:
@@ -86,13 +115,14 @@ def cmd_lineup_advice(args: argparse.Namespace) -> int:
     roster = client.roster(args.team_id)
     players = roster.get("roster") or []
     if args.sleeper:
-        players = attach_sleeper_projections(
-            players,
-            season=client.settings.season,
-            week=getattr(client.league, "current_week", None),
-        )
+        players = _attach_sleeper_week(players, client)
     advice = optimal_lineup(players)
     advice["team"] = {"id": roster.get("id"), "name": roster.get("name")}
+    advice["sources"] = {
+        "espn_week": True,
+        "sleeper_week": bool(args.sleeper),
+        "blend": "average" if args.sleeper else "espn",
+    }
     return _print(advice, args.format)
 
 
@@ -139,6 +169,30 @@ def cmd_trade_grade(args: argparse.Namespace) -> int:
     )
 
 
+def cmd_trade_calibrate(args: argparse.Namespace) -> int:
+    from league_manager.projections import league_scoring
+    from league_manager.trade_market import calibrate_trade_market, espn_reference_profile
+
+    client = _client()
+    scoring = league_scoring(client.league)
+    reference = espn_reference_profile(client.league, scoring)
+    roster = client.roster(args.team_id)
+    our_names = [p.get("name") for p in (roster.get("roster") or []) if p.get("name")]
+    weeks = [int(w) for w in args.weeks.split(",") if w.strip()]
+    seasons = [s.strip() for s in args.seasons.split(",") if s.strip()] if args.seasons else None
+    report = calibrate_trade_market(
+        reference=reference,
+        our_names=our_names,
+        seasons=seasons,
+        weeks=weeks,
+        max_leagues=args.max_leagues,
+        window=args.window,
+        apply=args.apply,
+        min_sample=args.min_sample,
+    )
+    return _print(report, args.format)
+
+
 def cmd_trade_search(args: argparse.Namespace) -> int:
     return _print(
         _client().trade_search(
@@ -149,6 +203,7 @@ def cmd_trade_search(args: argparse.Namespace) -> int:
             kinds=args.kinds,
             limit=args.limit,
             min_surplus=args.min_surplus,
+            max_surplus=args.max_surplus,
             with_team_id=args.with_team,
             sleeper=args.sleeper,
         ),
@@ -162,14 +217,16 @@ def cmd_waiver_advice(args: argparse.Namespace) -> int:
     free_agents = client.free_agents(position=args.position, size=args.size)
     players = roster.get("roster") or []
     if args.sleeper:
-        week = getattr(client.league, "current_week", None)
-        players = attach_sleeper_projections(players, season=client.settings.season, week=week)
-        free_agents = attach_sleeper_projections(
-            free_agents, season=client.settings.season, week=week
-        )
+        players = _attach_sleeper_week(players, client)
+        free_agents = _attach_sleeper_week(free_agents, client)
     return _print(
         {
             "team": {"id": roster.get("id"), "name": roster.get("name")},
+            "sources": {
+                "espn_week": True,
+                "sleeper_week": bool(args.sleeper),
+                "blend": "average" if args.sleeper else "espn",
+            },
             "targets": waiver_targets(players, free_agents, limit=args.limit),
         },
         args.format,
@@ -324,7 +381,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("lineup-advice", help="Recommend a starting lineup")
     p.add_argument("--team-id", type=int)
-    p.add_argument("--sleeper", action="store_true", help="Overlay Sleeper projections")
+    _add_sleeper_flag(
+        p,
+        help_text="Average ESPN + Sleeper this-week projections (default on; --no-sleeper for ESPN only)",
+    )
     p.set_defaults(func=cmd_lineup_advice)
 
     p = sub.add_parser("values", help="Redraft ST/LT VORP for a roster")
@@ -337,7 +397,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--horizon", type=int, default=DEFAULT_SHORT_TERM_WEEKS, help="Short-term weeks")
     p.add_argument("--season-end", type=int, dest="season_end", help="Last fantasy week (default 17)")
-    p.add_argument("--sleeper", action="store_true")
+    _add_sleeper_flag(p, help_text="Use Sleeper remaining-week sums for ROS (default on)")
     p.set_defaults(func=cmd_values)
 
     p = sub.add_parser("trade-grade", help="Grade a redraft trade on ST and LT surplus")
@@ -351,8 +411,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--horizon", type=int, default=DEFAULT_SHORT_TERM_WEEKS)
     p.add_argument("--season-end", type=int, dest="season_end")
-    p.add_argument("--sleeper", action="store_true")
+    _add_sleeper_flag(p, help_text="Use Sleeper remaining-week sums for ROS (default on)")
     p.set_defaults(func=cmd_trade_grade)
+
+    p = sub.add_parser(
+        "trade-calibrate",
+        help="Sample comparable redraft Sleeper accepts; shift search band; roster market insights",
+    )
+    p.add_argument("--team-id", type=int)
+    p.add_argument(
+        "--window",
+        choices=("auto", "contender", "bubble", "rebuilder"),
+        default="bubble",
+    )
+    p.add_argument("--weeks", default="1", help="Comma-separated Sleeper transaction weeks")
+    p.add_argument("--seasons", default="", help="Default: current NFL season from Sleeper state")
+    p.add_argument("--max-leagues", type=int, default=100)
+    p.add_argument("--min-sample", type=int, default=8, help="Min winning sides before shifting band")
+    p.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write recommended band override for trade-search (does not change VORP pricing)",
+    )
+    p.set_defaults(func=cmd_trade_calibrate)
 
     p = sub.add_parser(
         "trade-search",
@@ -366,11 +447,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--horizon", type=int, default=DEFAULT_SHORT_TERM_WEEKS)
     p.add_argument("--season-end", type=int, dest="season_end")
-    p.add_argument("--kinds", default="1:1,2:1,1:2", help="Comma-separated: 1:1,2:1,1:2")
+    p.add_argument("--kinds", default="1:1,2:1,1:2,2:2", help="Comma-separated: 1:1,2:1,1:2,2:2")
     p.add_argument("--limit", type=int, default=40)
-    p.add_argument("--min-surplus", type=float, default=1.0, dest="min_surplus")
+    p.add_argument(
+        "--min-surplus",
+        type=float,
+        default=None,
+        dest="min_surplus",
+        help="Minimum blended VORP edge for us (default: active band)",
+    )
+    p.add_argument(
+        "--max-surplus",
+        type=float,
+        default=None,
+        dest="max_surplus",
+        help="Top of realism band (default: active band from trade-calibrate)",
+    )
     p.add_argument("--with-team", type=int, dest="with_team", help="Only search this opponent")
-    p.add_argument("--sleeper", action="store_true", help="Sum Sleeper remaining weeks for ROS")
+    _add_sleeper_flag(p, help_text="Use Sleeper remaining-week sums for ROS (default on)")
     p.set_defaults(func=cmd_trade_search)
 
     p = sub.add_parser(
@@ -387,7 +481,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--season-end", type=int, dest="season_end")
     p.add_argument("--lookback", type=int, default=DEFAULT_LOOKBACK, help="Recent games to use as the market anchor")
     p.add_argument("--limit", type=int, default=8)
-    p.add_argument("--sleeper", action="store_true")
+    _add_sleeper_flag(p, help_text="Use Sleeper remaining-week sums for ROS (default on)")
     p.set_defaults(func=cmd_opportunities)
 
     p = sub.add_parser("waiver-advice", help="Rank free-agent adds vs your bench")
@@ -395,7 +489,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--position")
     p.add_argument("--size", type=int, default=50)
     p.add_argument("--limit", type=int, default=10)
-    p.add_argument("--sleeper", action="store_true")
+    _add_sleeper_flag(
+        p,
+        help_text="Average ESPN + Sleeper this-week projections (default on; --no-sleeper for ESPN only)",
+    )
     p.set_defaults(func=cmd_waiver_advice)
 
     p = sub.add_parser("set-lineup", help="Preview or submit lineup moves")

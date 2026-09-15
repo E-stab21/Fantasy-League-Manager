@@ -131,6 +131,14 @@ def test_cli_reads_with_fake_league(monkeypatch, capsys):
         "league_manager.cli.EspnClient",
         lambda _settings: EspnClient(_settings, league=FakeLeague()),
     )
+    monkeypatch.setattr(
+        "league_manager.espn_client.EspnClient._enrich_players",
+        lambda self, players, **kwargs: players,
+    )
+    monkeypatch.setattr(
+        "league_manager.cli._attach_sleeper_week",
+        lambda players, client: players,
+    )
 
     assert main(["status"]) == 0
     status = json.loads(capsys.readouterr().out)
@@ -177,6 +185,7 @@ def test_cli_auth_status_without_secrets(monkeypatch, capsys):
     monkeypatch.delenv("ESPN_S2", raising=False)
     monkeypatch.delenv("ESPN_SWID", raising=False)
     monkeypatch.delenv("ESPN_LEAGUE_ID", raising=False)
+    monkeypatch.setattr("league_manager.config.load_dotenv_files", lambda: None)
     assert main(["auth-status"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["ready"] is False

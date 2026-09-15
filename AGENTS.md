@@ -25,8 +25,9 @@ Work through `python3 -m league_manager` (or `league` if `$HOME/.local/bin` is o
 | ST / LT player values | `python3 -m league_manager values` |
 | Grade a trade | `python3 -m league_manager trade-grade --send IDS --receive IDS` |
 | Search sendable trades | `python3 -m league_manager trade-search` |
+| Calibrate accept band | `python3 -m league_manager trade-calibrate` |
 | Buy-low / sell-high | `python3 -m league_manager opportunities` |
-| Better ROS (Sleeper week-sum) | add `--sleeper` to `values`, `trade-grade`, `trade-search` |
+| Better ROS (Sleeper week-sum) | on by default for `values` / trades; `--no-sleeper` to disable |
 
 Writes are preview-only unless the user explicitly asks you to submit **and** `ESPN_WRITES_ENABLED=true` plus `ESPN_DRY_RUN=false` are set.
 
@@ -39,9 +40,11 @@ Only add `--confirm` after showing the preview and getting a clear go-ahead.
 
 ## Decision rules
 
-- Start/sit with ESPN this-week projections (`lineup-advice`). They already use this league's scoring.
-- For trades, do **not** flatten this week across the rest of the year if a real ROS number exists. LT prefers FantasyPros ROS (when `FANTASYPROS_API_KEY` is set), then Sleeper remaining-week sums (`--sleeper`), then ESPN season projection minus points scored, then weekly × games left. See `docs/PREDICTION_MODELS.md`.
-- Run `trade-search` to enumerate 1:1 / 2:1 / 1:2 packages. Keep ones that are +EV for us on ROS VORP and close-to-even on ESPN face value so the other manager can accept. Then `trade-grade` the ones you want to send.
+- Start/sit averages ESPN + Sleeper this-week projections (`lineup-advice`). Use `--no-sleeper` for ESPN only.
+- For trades, do **not** flatten this week across the rest of the year if a real ROS number exists. LT prefers FantasyPros ROS (when `FANTASYPROS_API_KEY` is set), then Sleeper remaining-week sums (default), then ESPN season projection minus points scored, then weekly × games left. See `docs/PREDICTION_MODELS.md`.
+- Run `trade-calibrate` periodically to sample comparable redraft accepts and optionally `--apply` a higher top band. Accepts calibrate the search band only — never bake them into VORP.
+- Run `trade-search` / `trade-grade` using roster + lineup surplus (ST/LT each). Prefer deals inside the realism band. ESPN face still gauges whether the other manager might accept.
+
 - Buy-low / sell-high compares the last few *actual* games to the weekly projection other managers saw. Recency is the market signal, not a second projection.
 - Do not train a weekly point model. Do not scrape FantasyPros HTML.
 - Sit injured / OUT / IR / doubtful players.

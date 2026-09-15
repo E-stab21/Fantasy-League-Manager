@@ -187,26 +187,30 @@ class EspnClient:
         *,
         current_week: int,
         season_end_week: int,
-        sleeper: bool = False,
+        sleeper: bool = True,
     ) -> list[dict[str, Any]]:
         scoring = league_scoring(self.league)
         enriched = players
         if sleeper:
             from league_manager.projections import attach_sleeper_projections, attach_sleeper_ros
 
-            enriched = attach_sleeper_projections(
-                enriched,
-                season=self.settings.season,
-                week=current_week,
-                scoring=scoring,
-            )
-            enriched = attach_sleeper_ros(
-                enriched,
-                season=self.settings.season,
-                current_week=current_week,
-                through=season_end_week,
-                scoring=scoring,
-            )
+            try:
+                enriched = attach_sleeper_projections(
+                    enriched,
+                    season=self.settings.season,
+                    week=current_week,
+                    scoring=scoring,
+                )
+                enriched = attach_sleeper_ros(
+                    enriched,
+                    season=self.settings.season,
+                    current_week=current_week,
+                    through=season_end_week,
+                    scoring=scoring,
+                )
+            except Exception:
+                # Offline / rate-limit: fall through to ESPN remainder / weekly.
+                pass
         if self.settings.fantasypros_api_key:
             from league_manager.fantasypros import attach_fantasypros
 
@@ -250,7 +254,7 @@ class EspnClient:
         short_term_weeks: int = DEFAULT_SHORT_TERM_WEEKS,
         season_end_week: int | None = None,
         fa_size: int = 50,
-        sleeper: bool = False,
+        sleeper: bool = True,
     ) -> dict[str, Any]:
         team = self.get_team(team_id)
         context = context_from_league(
@@ -303,7 +307,7 @@ class EspnClient:
         short_term_weeks: int = DEFAULT_SHORT_TERM_WEEKS,
         season_end_week: int | None = None,
         fa_size: int = 80,
-        sleeper: bool = False,
+        sleeper: bool = True,
     ) -> dict[str, Any]:
         team = self.get_team(team_id)
         context = context_from_league(
@@ -322,6 +326,14 @@ class EspnClient:
         )
         players = {player["id"]: player for player in enriched if player.get("id") is not None}
         baselines = replacement_baselines(free_agents)
+        our_roster = [
+            players[player["id"]]
+            for player in (team_to_dict(team, include_roster=True).get("roster") or [])
+            if player.get("id") in players
+        ]
+        # Ensure roster rows carry current enrichment (ROS / Sleeper).
+        for row in our_roster:
+            row["team_id"] = team.team_id
         result = grade_trade(
             send_ids=send_ids,
             receive_ids=receive_ids,
@@ -329,6 +341,7 @@ class EspnClient:
             context=context,
             baselines=baselines,
             window=window,
+            our_roster=our_roster,
         )
         result["team"] = team_to_dict(team, include_roster=False)
         result["sources"] = self._ros_source_flags(sleeper=sleeper)
@@ -344,7 +357,7 @@ class EspnClient:
         lookback: int = DEFAULT_LOOKBACK,
         limit: int = 8,
         fa_size: int = 50,
-        sleeper: bool = False,
+        sleeper: bool = True,
     ) -> dict[str, Any]:
         team = self.get_team(team_id)
         context = context_from_league(
@@ -387,10 +400,11 @@ class EspnClient:
         season_end_week: int | None = None,
         kinds: str | None = None,
         limit: int = 40,
-        min_surplus: float = 1.0,
+        min_surplus: float | None = None,
+        max_surplus: float | None = None,
         with_team_id: int | None = None,
         fa_size: int = 50,
-        sleeper: bool = False,
+        sleeper: bool = True,
     ) -> dict[str, Any]:
         team = self.get_team(team_id)
         context = context_from_league(
@@ -431,6 +445,7 @@ class EspnClient:
             kinds=parse_kinds(kinds),
             limit=limit,
             min_surplus=min_surplus,
+            max_surplus=max_surplus,
             with_team_id=with_team_id,
         )
         result["team"] = team_to_dict(team, include_roster=False)

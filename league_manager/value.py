@@ -1,8 +1,8 @@
 """Redraft short-term and rest-of-season player value.
 
 Short-term is this week's rate over the next few games. Long-term prefers a
-real remaining-season total (FantasyPros ROS, Sleeper remaining weeks, or
-ESPN season projection minus points already scored) before falling back to
+real remaining-season total (FantasyPros ROS, Sleeper remaining weeks by default,
+or ESPN season projection minus points already scored) before falling back to
 this week flattened across the rest of the year.
 """
 
@@ -38,6 +38,13 @@ WINDOW_WEIGHTS = {
     "contender": (0.65, 0.35),
     "bubble": (0.5, 0.5),
     "rebuilder": (0.3, 0.7),
+}
+
+# roster weight, lineup weight — how much asset VORP vs starting-XI points matter
+STRUCTURE_WEIGHTS = {
+    "contender": (0.35, 0.65),
+    "bubble": (0.45, 0.55),
+    "rebuilder": (0.60, 0.40),
 }
 
 
@@ -92,6 +99,11 @@ def infer_window(context: LeagueContext, override: str | None = None) -> str:
 
 def window_weights(window: str) -> tuple[float, float]:
     return WINDOW_WEIGHTS[window]
+
+
+def structure_weights(window: str) -> tuple[float, float]:
+    """(roster_weight, lineup_weight) for trade grading."""
+    return STRUCTURE_WEIGHTS[window]
 
 
 def _float_or_none(value: Any) -> float | None:

@@ -1,8 +1,12 @@
-"""Enumerate 1-for-1, 2-for-1, and 1-for-2 redraft trades.
+"""Enumerate 1-for-1, 2-for-1, 1-for-2, and 2-for-2 redraft trades.
 
-Our surplus uses the ROS VORP stack. Their acceptance check uses ESPN face
-value (this week's ESPN projection flattened over remaining games) — the
-number other managers are most likely anchoring on.
+Keep packages inside a realism band calibrated from recent accepted Sleeper
+trades: enough blended surplus to be worth sending, but not so lopsided that
+accepts almost never happen. ESPN face + ROS caps bound how much the other
+manager can give up and still look plausible.
+
+`trade-calibrate --apply` may raise the top edge via an override file; see
+`league_manager.trade_market.active_band`. Accepts never feed VORP pricing.
 """
 
 from __future__ import annotations
@@ -12,6 +16,7 @@ from typing import Any, Iterable
 
 from league_manager.slots import normalize_position
 from league_manager.trades import grade_valued_trade
+from league_manager.trade_market import active_band
 from league_manager.value import (
     LeagueContext,
     PlayerValue,
@@ -21,14 +26,31 @@ from league_manager.value import (
     weekly_rate,
 )
 
-DEFAULT_KINDS = ("1:1", "2:1", "1:2")
+DEFAULT_KINDS = ("1:1", "2:1", "1:2", "2:2")
 SKIP_POSITIONS = {"K", "D/ST", "DST", "DEF", "PK"}
 MIN_WEEKLY = 5.0
 MAX_PER_SIDE = 12
-MIN_SURPLUS = 1.0
-MIN_THEIR_FACE = -3.5
-MAX_THEIR_FACE = 10.0
 MAX_PER_OPPONENT = 8
+
+
+def _band_defaults() -> dict[str, float]:
+    band = active_band()
+    return band.as_dict()
+
+
+# Module-level names kept for tests / calibration imports; reflect active band.
+def _refresh_band_constants() -> None:
+    global MIN_SURPLUS, MAX_SURPLUS, MIN_THEIR_FACE, MAX_THEIR_FACE, MIN_THEIR_LT, MAX_THEIR_LT
+    d = _band_defaults()
+    MIN_SURPLUS = d["min_surplus"]
+    MAX_SURPLUS = d["max_surplus"]
+    MIN_THEIR_FACE = d["min_their_face"]
+    MAX_THEIR_FACE = d["max_their_face"]
+    MIN_THEIR_LT = d["min_their_lt"]
+    MAX_THEIR_LT = d["max_their_lt"]
+
+
+_refresh_band_constants()
 
 
 def parse_kinds(raw: str | None) -> tuple[str, ...]:
@@ -38,7 +60,7 @@ def parse_kinds(raw: str | None) -> tuple[str, ...]:
     parts = tuple(part.strip() for part in raw.split(",") if part.strip())
     bad = [part for part in parts if part not in allowed]
     if bad:
-        raise ValueError(f"Unknown trade kinds {bad}. Use 1:1, 2:1, 1:2.")
+        raise ValueError(f"Unknown trade kinds {bad}. Use 1:1, 2:1, 1:2, 2:2.")
     return parts or DEFAULT_KINDS
 
 
@@ -83,20 +105,46 @@ def _side_summary(players: list[dict[str, Any]], valued: dict[Any, PlayerValue])
     return rows
 
 
-def _package_score(blended: float, their_face_net: float) -> float:
-    if -2.0 <= their_face_net <= 4.0:
-        fairness = 3.0 - abs(their_face_net) * 0.4
+def _package_score(blended: float, their_face_net: float, their_lt_net: float) -> float:
+    """Prefer solid +EV with still-plausible optics; slight lean into surplus.
+
+    Hand-tuned (not fit from accepts). Band filters hard caps; this only ranks.
+    """
+    # Sweet spot ~2–12; above that, soft diminishing returns (not a smash magnet).
+    if blended <= 12.0:
+        surplus_part = blended * 1.95
     else:
-        fairness = -abs(their_face_net) * 0.15
-    return blended * 1.4 + fairness
+        surplus_part = 23.4 - (blended - 12.0) * 0.25
+
+    # Slight ESPN-face gift to them (0..5) reads as fair / easy to accept.
+    if 0.0 <= their_face_net <= 5.0:
+        face_part = 3.2 - abs(their_face_net - 2.0) * 0.3
+    elif -2.5 <= their_face_net < 0.0:
+        face_part = their_face_net * 0.6
+    else:
+        face_part = -abs(their_face_net - 2.0) * 0.25
+
+    # Their ROS VORP net under our model should stay in a dealable range.
+    if -8.0 <= their_lt_net <= 10.0:
+        ros_part = 2.7 - abs(their_lt_net) * 0.18
+    else:
+        ros_part = -abs(their_lt_net) * 0.12
+
+    return surplus_part + face_part + ros_part
 
 
-def _why(grade: dict[str, Any], their_face_net: float, send: list[dict], recv: list[dict]) -> str:
+def _why(
+    grade: dict[str, Any],
+    their_face_net: float,
+    their_lt_net: float,
+    send: list[dict],
+    recv: list[dict],
+) -> str:
     send_names = ", ".join(str(player.get("name")) for player in send)
     recv_names = ", ".join(str(player.get("name")) for player in recv)
     return (
-        f"Send {send_names} for {recv_names}. We {grade['summary']} "
-        f"ESPN face for them is {their_face_net:+.1f} remaining projected points."
+        f"Send {send_names} for {recv_names}. {grade['summary']} "
+        f"ESPN face for them {their_face_net:+.1f}; their ROS VORP net {their_lt_net:+.1f}."
     )
 
 
@@ -110,13 +158,29 @@ def search_trades(
     window: str | None = None,
     kinds: Iterable[str] = DEFAULT_KINDS,
     limit: int = 40,
-    min_surplus: float = MIN_SURPLUS,
-    min_their_face: float = MIN_THEIR_FACE,
-    max_their_face: float = MAX_THEIR_FACE,
+    min_surplus: float | None = None,
+    max_surplus: float | None = None,
+    min_their_face: float | None = None,
+    max_their_face: float | None = None,
+    min_their_lt: float | None = None,
+    max_their_lt: float | None = None,
     max_players_per_side: int = MAX_PER_SIDE,
     with_team_id: Any | None = None,
     max_per_opponent: int = MAX_PER_OPPONENT,
 ) -> dict[str, Any]:
+    band = active_band()
+    if min_surplus is None:
+        min_surplus = band.min_surplus
+    if max_surplus is None:
+        max_surplus = band.max_surplus
+    if min_their_face is None:
+        min_their_face = band.min_their_face
+    if max_their_face is None:
+        max_their_face = band.max_their_face
+    if min_their_lt is None:
+        min_their_lt = band.min_their_lt
+    if max_their_lt is None:
+        max_their_lt = band.max_their_lt
     resolved = infer_window(context, window)
     valued = {
         player_id: value_player(player, context, baselines, window=resolved)
@@ -143,15 +207,23 @@ def search_trades(
             recv_players=recv,
             context=context,
             window=resolved,
+            our_roster=our_team.get("roster") or [],
+            baselines=baselines,
         )
         their_face_net = sum(faces[player["id"]] for player in send) - sum(
             faces[player["id"]] for player in recv
         )
-        if grade["blended"] < min_surplus:
+        # Positive => they gain ROS VORP if they used our numbers.
+        their_lt_net = sum(item.lt_vorp for item in send_values) - sum(
+            item.lt_vorp for item in recv_values
+        )
+        if grade["blended"] < min_surplus or grade["blended"] > max_surplus:
             return
         if their_face_net < min_their_face or their_face_net > max_their_face:
             return
-        score = _package_score(grade["blended"], their_face_net)
+        if their_lt_net < min_their_lt or their_lt_net > max_their_lt:
+            return
+        score = _package_score(grade["blended"], their_face_net, their_lt_net)
         kept.append(
             {
                 "kind": kind,
@@ -165,11 +237,16 @@ def search_trades(
                 "blended": grade["blended"],
                 "delta_st": grade["delta_st"],
                 "delta_lt": grade["delta_lt"],
-                "stud_tax": grade["stud_tax"],
-                "lineup_hole_penalty": grade["lineup_hole_penalty"],
+                "roster": grade.get("roster"),
+                "lineup": {
+                    "delta_st": (grade.get("lineup") or {}).get("delta_st"),
+                    "delta_lt": (grade.get("lineup") or {}).get("delta_lt"),
+                    "mode": (grade.get("lineup") or {}).get("mode"),
+                },
                 "their_espn_face_net": round(their_face_net, 2),
+                "their_ros_vorp_net": round(their_lt_net, 2),
                 "score": round(score, 2),
-                "why": _why(grade, their_face_net, send, recv),
+                "why": _why(grade, their_face_net, their_lt_net, send, recv),
             }
         )
 
@@ -191,6 +268,11 @@ def search_trades(
         if "1:2" in kind_set and len(theirs) >= 2:
             for send_player, recv_pair in product(our_players, combinations(theirs, 2)):
                 consider("1:2", other, [send_player], list(recv_pair))
+        if "2:2" in kind_set and len(our_players) >= 2 and len(theirs) >= 2:
+            for send_pair, recv_pair in product(
+                combinations(our_players, 2), combinations(theirs, 2)
+            ):
+                consider("2:2", other, list(send_pair), list(recv_pair))
 
     kept.sort(key=lambda item: item["score"], reverse=True)
     picked: list[dict[str, Any]] = []
@@ -211,8 +293,11 @@ def search_trades(
         "returned": len(picked),
         "filters": {
             "min_surplus": min_surplus,
+            "max_surplus": max_surplus,
             "min_their_espn_face": min_their_face,
             "max_their_espn_face": max_their_face,
+            "min_their_ros_vorp": min_their_lt,
+            "max_their_ros_vorp": max_their_lt,
         },
         "trades": picked,
     }

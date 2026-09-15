@@ -1,0 +1,340 @@
+{
+  "seasons": [
+    2024,
+    2025
+  ],
+  "scoring": "pts_ppr",
+  "positions": [
+    "QB",
+    "RB",
+    "WR",
+    "TE"
+  ],
+  "n_player_weeks": 8777,
+  "caveats": [
+    "Sleeper historical projections may be revised after the fact; updated_at timestamps for 2024 W1 clustered near game week, so bias risk looks limited but not zero.",
+    "No archived ESPN weekly projections \u2014 blend study uses nflverse expected fantasy points instead.",
+    "Actuals are Sleeper pts_ppr (not your ESPN league scoring)."
+  ],
+  "1_weekly_accuracy": {
+    "overall": {
+      "n": 8777,
+      "mae": 4.697,
+      "bias": -0.408,
+      "rmse": 6.375
+    },
+    "by_position": {
+      "QB": {
+        "n": 1028,
+        "mae": 6.327,
+        "bias": 2.251,
+        "rmse": 7.831
+      },
+      "RB": {
+        "n": 2450,
+        "mae": 4.558,
+        "bias": -0.416,
+        "rmse": 6.212
+      },
+      "WR": {
+        "n": 3534,
+        "mae": 4.747,
+        "bias": -0.764,
+        "rmse": 6.465
+      },
+      "TE": {
+        "n": 1765,
+        "mae": 3.84,
+        "bias": -1.234,
+        "rmse": 5.4
+      }
+    }
+  },
+  "naive_baseline": {
+    "n": 6324,
+    "mae_sleeper": 5.044,
+    "mae_last_week_actual": 6.636
+  },
+  "2_blend_weights": {
+    "espn_note": "No archived ESPN weekly projections available via public APIs, so ESPN\u2194Sleeper start/sit weights cannot be fit from history yet. Proxy blends below use only pregame-available signals.",
+    "vs_last_week_actual": {
+      "n": 6324,
+      "left": "sleeper",
+      "right": "last_week",
+      "best_left_weight": 0.95,
+      "mae_at_best": 5.041,
+      "mae_sleeper_only": 5.044,
+      "mae_last_week_only": 6.636,
+      "mae_5050": 5.428
+    },
+    "vs_trailing_mean": {
+      "n": 6035,
+      "left": "sleeper",
+      "right": "trail3",
+      "best_left_weight": 0.9,
+      "mae_at_best": 5.053,
+      "mae_sleeper_only": 5.064,
+      "mae_trail3_only": 5.701,
+      "mae_5050": 5.181
+    },
+    "by_position_vs_last_week": {
+      "QB": {
+        "n": 808,
+        "left": "sleeper",
+        "right": "last_week",
+        "best_left_weight": 0.85,
+        "mae_at_best": 6.34,
+        "mae_sleeper_only": 6.377,
+        "mae_last_week_only": 7.989,
+        "mae_5050": 6.613
+      },
+      "RB": {
+        "n": 1863,
+        "left": "sleeper",
+        "right": "last_week",
+        "best_left_weight": 1.0,
+        "mae_at_best": 4.892,
+        "mae_sleeper_only": 4.892,
+        "mae_last_week_only": 6.409,
+        "mae_5050": 5.28
+      },
+      "WR": {
+        "n": 2484,
+        "left": "sleeper",
+        "right": "last_week",
+        "best_left_weight": 0.95,
+        "mae_at_best": 5.091,
+        "mae_sleeper_only": 5.092,
+        "mae_last_week_only": 6.814,
+        "mae_5050": 5.53
+      },
+      "TE": {
+        "n": 1169,
+        "left": "sleeper",
+        "right": "last_week",
+        "best_left_weight": 0.95,
+        "mae_at_best": 4.26,
+        "mae_sleeper_only": 4.266,
+        "mae_last_week_only": 5.682,
+        "mae_5050": 4.627
+      }
+    },
+    "reference_same_week_opportunity": {
+      "n": 8743,
+      "left": "sleeper",
+      "right": "opp_exp",
+      "best_left_weight": 0.05,
+      "mae_at_best": 3.222,
+      "mae_sleeper_only": 4.701,
+      "mae_opp_exp_only": 3.222,
+      "mae_5050": 3.654,
+      "warning": "nflverse total_fantasy_points_exp uses same-week opportunity; it is not a pregame projection. Do not use this weight for start/sit."
+    }
+  },
+  "3_ros_drift": {
+    "definition": "As of week W: sum Sleeper weekly projections for weeks W..17 minus sum actual PPR for weeks W..17 (same players).",
+    "snapshots": {
+      "week_1": {
+        "n": 703,
+        "mae": 18.357,
+        "bias": 1.579,
+        "rmse": 24.357
+      },
+      "week_5": {
+        "n": 593,
+        "mae": 15.664,
+        "bias": 0.867,
+        "rmse": 21.112
+      },
+      "week_10": {
+        "n": 634,
+        "mae": 12.301,
+        "bias": 1.232,
+        "rmse": 16.969
+      },
+      "week_14": {
+        "n": 603,
+        "mae": 8.738,
+        "bias": 0.301,
+        "rmse": 12.121
+      }
+    },
+    "by_asof_week": {
+      "1": {
+        "n": 703,
+        "mae": 18.357,
+        "bias": 1.579,
+        "rmse": 24.357
+      },
+      "2": {
+        "n": 694,
+        "mae": 17.427,
+        "bias": 1.092,
+        "rmse": 23.391
+      },
+      "3": {
+        "n": 688,
+        "mae": 16.672,
+        "bias": 0.608,
+        "rmse": 22.505
+      },
+      "4": {
+        "n": 690,
+        "mae": 16.176,
+        "bias": 0.363,
+        "rmse": 22.033
+      },
+      "5": {
+        "n": 593,
+        "mae": 15.664,
+        "bias": 0.867,
+        "rmse": 21.112
+      },
+      "6": {
+        "n": 620,
+        "mae": 14.953,
+        "bias": 0.615,
+        "rmse": 20.214
+      },
+      "7": {
+        "n": 670,
+        "mae": 14.154,
+        "bias": 0.61,
+        "rmse": 19.502
+      },
+      "8": {
+        "n": 640,
+        "mae": 13.34,
+        "bias": 0.906,
+        "rmse": 18.201
+      },
+      "9": {
+        "n": 637,
+        "mae": 13.022,
+        "bias": 0.763,
+        "rmse": 17.926
+      },
+      "10": {
+        "n": 634,
+        "mae": 12.301,
+        "bias": 1.232,
+        "rmse": 16.969
+      },
+      "11": {
+        "n": 657,
+        "mae": 11.596,
+        "bias": 0.641,
+        "rmse": 16.339
+      },
+      "12": {
+        "n": 609,
+        "mae": 10.353,
+        "bias": 0.387,
+        "rmse": 14.379
+      },
+      "13": {
+        "n": 717,
+        "mae": 9.686,
+        "bias": 0.397,
+        "rmse": 13.504
+      },
+      "14": {
+        "n": 603,
+        "mae": 8.738,
+        "bias": 0.301,
+        "rmse": 12.121
+      },
+      "15": {
+        "n": 731,
+        "mae": 7.502,
+        "bias": 0.28,
+        "rmse": 10.555
+      },
+      "16": {
+        "n": 722,
+        "mae": 5.999,
+        "bias": 0.145,
+        "rmse": 8.513
+      },
+      "17": {
+        "n": 719,
+        "mae": 4.178,
+        "bias": 0.144,
+        "rmse": 5.991
+      }
+    },
+    "by_position_week_1": {
+      "QB": {
+        "n": 65,
+        "mae": 35.579,
+        "bias": 28.641,
+        "rmse": 41.953
+      },
+      "RB": {
+        "n": 187,
+        "mae": 16.613,
+        "bias": -2.739,
+        "rmse": 21.811
+      },
+      "WR": {
+        "n": 295,
+        "mae": 17.927,
+        "bias": 1.267,
+        "rmse": 23.135
+      },
+      "TE": {
+        "n": 156,
+        "mae": 14.086,
+        "bias": -3.933,
+        "rmse": 18.914
+      }
+    }
+  },
+  "4_injury_miss": {
+    "definition": "residual = projected PPR \u2212 actual. Positive bias = overprojected.",
+    "by_injury_status": {
+      "NONE": {
+        "n": 7373,
+        "mae": 4.753,
+        "bias": -0.442,
+        "rmse": 6.446
+      },
+      "QUESTIONABLE": {
+        "n": 413,
+        "mae": 3.941,
+        "bias": -0.539,
+        "rmse": 5.285
+      },
+      "OUT": {
+        "n": 457,
+        "mae": 5.14,
+        "bias": 0.166,
+        "rmse": 6.911
+      },
+      "IR": {
+        "n": 356,
+        "mae": 4.067,
+        "bias": -0.208,
+        "rmse": 5.522
+      },
+      "PUP": {
+        "n": 81,
+        "mae": 3.81,
+        "bias": -1.272,
+        "rmse": 5.754
+      },
+      "DNR": {
+        "n": 17,
+        "mae": 4.662,
+        "bias": 2.132,
+        "rmse": 5.439
+      },
+      "NA": {
+        "n": 80,
+        "mae": 4.622,
+        "bias": -0.431,
+        "rmse": 6.098
+      }
+    }
+  }
+}

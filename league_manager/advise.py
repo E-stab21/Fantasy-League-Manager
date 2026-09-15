@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from league_manager.projections import primary_projection
+from league_manager.projections import primary_projection, projection_source
 from league_manager.slots import (
     BENCH_SLOT,
     IR_SLOT,
@@ -67,6 +67,9 @@ def optimal_lineup(roster: list[dict[str, Any]]) -> dict[str, Any]:
                 "recommended_slot_id": slot,
                 "recommended_slot": slot_name(slot),
                 "projection": primary_projection(pick),
+                "espn_projection": pick.get("projected_points"),
+                "sleeper_projection": pick.get("sleeper_projected_points"),
+                "projection_source": projection_source(pick),
             }
         )
 
@@ -142,7 +145,7 @@ def optimal_lineup(roster: list[dict[str, Any]]) -> dict[str, Any]:
         "recommended": recommended,
         "moves": moves,
         "notes": [
-            "Uses ESPN projected points first, then Sleeper if attached.",
+            "Averages ESPN and Sleeper this-week projections when both exist.",
             "Injured players are excluded from the recommended lineup.",
             "This is a greedy slot fill, not a trained model.",
         ],

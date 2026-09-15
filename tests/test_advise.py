@@ -80,5 +80,12 @@ def test_sleeper_name_overlay():
     assert rows[0]["sleeper_projected_points"] == 21.4
     assert normalize_name("Ja'Marr Chase Jr.") == normalize_name("Ja'Marr Chase")
     assert projection_points(projection_map["4016"], "ppr") == 21.4
-    assert primary_projection(rows[0]) == 16
+    assert primary_projection(rows[0]) == 18.7
     assert parse_slot("FLEX") == 23
+
+
+def test_primary_projection_averages_when_both_present():
+    assert primary_projection({"projected_points": 10, "sleeper_projected_points": 20}) == 15
+    assert primary_projection({"projected_points": 10}) == 10
+    assert primary_projection({"sleeper_projected_points": 20}) == 20
+    assert primary_projection({}) == 0.0
