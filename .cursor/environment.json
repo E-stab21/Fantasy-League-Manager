@@ -1,6 +1,6 @@
 {
   "name": "Fantasy League Manager",
-  "install": "python3 -m pip install --user -e .",
+  "install": "python3 -m pip install --user -e '.[dev]'",
   "egressAllowlist": [
     "lm-api-reads.fantasy.espn.com",
     "lm-api-writes.fantasy.espn.com",
