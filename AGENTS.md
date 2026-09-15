@@ -53,4 +53,4 @@ Only add `--confirm` after showing the preview and getting a clear go-ahead.
 
 ## Out of scope unless asked
 
-Do not rebuild the Chrome draft extension or scrape FantasyPros HTML. The draft helper remains in `Chrome_Extension/` as a separate, unfinished UI.
+Do not rebuild the Chrome draft extension or scrape FantasyPros HTML. The draft helper remains in `chrome_extension/` as a separate, unfinished UI.
