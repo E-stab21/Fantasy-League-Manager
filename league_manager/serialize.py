@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from league_manager.slots import is_starter_slot, slot_name
+from league_manager.slots import is_starter_slot, parse_slot, slot_name
 
 
 def _attr(obj: Any, name: str, default: Any = None) -> Any:
@@ -30,12 +30,27 @@ def weekly_stats_to_dict(player: Any) -> dict[int, dict[str, float | None]]:
     return weeks
 
 
+def _lineup_slot_id(player: Any) -> int | None:
+    """espn-api 0.46+ stores the current slot as a name (`WR`, `BE`), not `lineupSlotId`."""
+    raw = _attr(player, "lineupSlotId")
+    if raw is None:
+        raw = _attr(player, "lineup_slot_id")
+    if raw is None:
+        raw = _attr(player, "lineupSlot")
+    if raw is None:
+        raw = _attr(player, "lineup_slot")
+    if raw is None:
+        return None
+    if isinstance(raw, int):
+        return raw
+    try:
+        return parse_slot(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def player_to_dict(player: Any, *, include_lineup: bool = True) -> dict[str, Any]:
-    slot_id = _attr(player, "lineupSlotId")
-    if slot_id is None:
-        raw_slot = _attr(player, "lineupSlot")
-        if isinstance(raw_slot, int):
-            slot_id = raw_slot
+    slot_id = _lineup_slot_id(player)
     projected = _attr(player, "projected_points")
     projected_avg = _attr(player, "projected_avg_points")
     if projected is None:
