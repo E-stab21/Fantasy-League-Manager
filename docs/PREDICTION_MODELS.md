@@ -10,8 +10,9 @@ Question: should this repo train its own fantasy prediction models, or use publi
 
 The unofficial fantasy API returns **league-scoring-adjusted** projected points on rosters and free agents. That is the most important number for start/sit and waivers because PPR vs standard, bonus yards, TE premium, and custom scoring are already applied.
 
-`league lineup-advice` and `league waiver-advice` average ESPN and Sleeper
-this-week projections when both are available (`--no-sleeper` for ESPN only).
+`league lineup-advice` averages ESPN and Sleeper this-week projections when both are available (`--no-sleeper` for ESPN only).
+
+`league waiver-advice` and `league claim` / `league add` grade add/drops with the same redraft surplus as trades: ST vs LT and roster VORP vs lineup surplus.
 
 ### Sleeper (secondary, no auth)
 
@@ -62,11 +63,12 @@ Otherwise a custom model is extra training cost, weekly breakage, and worse inju
 
 ## What this repo does
 
-1. **Start/sit averages ESPN + Sleeper this-week projections** when both exist. `lineup-advice` / `waiver-advice` default this on (`--no-sleeper` for ESPN only).
-2. **Sleeper ROS is on by default** for trades and season-long value (`values`, `trade-grade`, `trade-search`, `opportunities`). Use `--no-sleeper` to fall back to ESPN remainder.
-3. **Use simple optimizers**, not ML: greedy slot fill for lineups; projection delta vs your worst bench piece for waivers.
+1. **Start/sit averages ESPN + Sleeper this-week projections** when both exist. `lineup-advice` defaults this on (`--no-sleeper` for ESPN only).
+2. **Sleeper ROS is on by default** for trades, season-long value, and waivers (`values`, `trade-grade`, `trade-search`, `opportunities`, `waiver-advice`, `claim`, `add`). Use `--no-sleeper` to fall back to ESPN remainder.
+3. **Use simple optimizers**, not ML: greedy slot fill for lineups; the same ST/LT roster + lineup surplus as trades for waiver add/drops.
 4. **Redraft trade value** (`league values`, `league trade-grade`): short-term and rest-of-season surplus on **two** axes — **roster** (waiver-replacement VORP) and **lineup** (optimal starting-XI points before vs after the trade). Horizon weights (contender / bubble / rebuilder) mix ST vs LT; structure weights mix roster vs lineup (contenders lean lineup). Stud tax / hole hacks are gone — selling a starter for bench parts shows up as negative lineup surplus. Outside accepts (`trade-calibrate`) use a typical starter-floor VORP when the other roster is unknown. Their acceptance distance still uses ESPN face. LT ROS order: FantasyPros → Sleeper remaining weeks → ESPN remainder → weekly × games.
-5. **Trade search** (`league trade-search`): enumerate 1:1, 2:1, 1:2, and 2:2 packages against other rosters. Keep deals inside a band calibrated from comparable redraft Sleeper accepts (`league trade-calibrate`): blended surplus about 1–40 by default (worth sending, not absurd). `--apply` may raise the top edge when the market accepts fatter +EV. **Accepts do not change player VORP** — only the search band / talk tracks. Rank by fairness + slight edge, not max jackpot.
-6. **Buy-low / sell-high** (`league opportunities`): last 1–3 actual games vs those weeks’ ESPN projections (the number other managers anchored on). Cold + still-positive ROS VORP on someone else’s roster is a buy-low. A heater on our roster is a sell-high. Injury with remaining ROS value is also a buy-low. Snap share and recent averages are **not** mixed into our forward value again; they are already inside the projection.
+5. **Waiver claims** (`league waiver-advice`, `league claim`, `league add`): treat each add/drop as a 1:1 trade. Rank free agents by blended surplus against the best bench drop (same ST/LT and roster/lineup mix). `claim` / `add` attach that grade on preview. Do not rank streamers by this-week points vs an empty positional bench.
+6. **Trade search** (`league trade-search`): enumerate 1:1, 2:1, 1:2, and 2:2 packages against other rosters. Keep deals inside a band calibrated from comparable redraft Sleeper accepts (`league trade-calibrate`): blended surplus about 1–40 by default (worth sending, not absurd). `--apply` may raise the top edge when the market accepts fatter +EV. **Accepts do not change player VORP** — only the search band / talk tracks. Rank by fairness + slight edge, not max jackpot.
+7. **Buy-low / sell-high** (`league opportunities`): last 1–3 actual games vs those weeks’ ESPN projections (the number other managers anchored on). Cold + still-positive ROS VORP on someone else’s roster is a buy-low. A heater on our roster is a sell-high. Injury with remaining ROS value is also a buy-low. Snap share and recent averages are **not** mixed into our forward value again; they are already inside the projection.
 
 If a later agent is asked to build a weekly point model, start from nflverse weekly stats + ESPN scoring settings, and score it against ESPN/Sleeper holdout weeks before replacing the public numbers.
