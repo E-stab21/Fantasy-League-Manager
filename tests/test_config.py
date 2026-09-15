@@ -30,6 +30,8 @@ def test_load_settings_reads_env(monkeypatch):
     monkeypatch.setenv("ESPN_TEAM_ID", "3")
     monkeypatch.setenv("ESPN_SEASON", "2026")
     monkeypatch.setenv("ESPN_SPORT", "nfl")
+    monkeypatch.delenv("ESPN_WRITES_ENABLED", raising=False)
+    monkeypatch.delenv("ESPN_DRY_RUN", raising=False)
     settings = load_settings()
     assert settings.league_id == 424242
     assert settings.team_id == 3
