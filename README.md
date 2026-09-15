@@ -46,7 +46,7 @@ Live posts require `ESPN_WRITES_ENABLED=true`, `ESPN_DRY_RUN=false`, and `--conf
 
 ## Predictions
 
-Do **not** train a custom model first. Start/sit averages ESPN league-scoring-adjusted weekly projections with Sleeper this-week. Trade ROS defaults to Sleeper remaining weeks (FantasyPros first if `FANTASYPROS_API_KEY` is set), then ESPN season projection minus points scored — not this week flattened across the calendar. Details in [docs/PREDICTION_MODELS.md](docs/PREDICTION_MODELS.md).
+Do **not** train a custom model first. Start/sit averages ESPN league-scoring-adjusted weekly projections with Sleeper this-week. Trade and waiver ROS defaults to Sleeper remaining weeks (FantasyPros first if `FANTASYPROS_API_KEY` is set), then ESPN season projection minus points scored — not this week flattened across the calendar. Details in [docs/PREDICTION_MODELS.md](docs/PREDICTION_MODELS.md).
 
 ## Tests
 

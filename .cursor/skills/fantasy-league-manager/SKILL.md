@@ -33,7 +33,16 @@ python3 -m league_manager waiver-advice
 python3 -m league_manager values
 ```
 
-Sleeper is on by default for start/sit (averaged with ESPN) and for trade ROS. Use `--no-sleeper` to force ESPN-only.
+Sleeper is on by default for start/sit (averaged with ESPN) and for trade/waiver ROS. Use `--no-sleeper` to force ESPN-only.
+
+## Waivers (redraft)
+
+```bash
+python3 -m league_manager waiver-advice
+python3 -m league_manager claim --player ID --drop ID
+```
+
+`waiver-advice` grades each free agent as a 1:1 add/drop using the same ST/LT roster VORP and lineup surplus as `trade-grade`. It pairs the add with the bench drop that maximizes blended surplus. `claim` and `add` attach that grade on preview. `--window` can be `auto`, `contender`, `bubble`, or `rebuilder`.
 
 ## Trades (redraft)
 
@@ -73,4 +82,4 @@ Submit only when the user says to execute, then add `--confirm`. Live posts also
 
 ## Projections
 
-Do not train a model unless asked. Start/sit averages ESPN + Sleeper this-week projections. Trade ROS defaults to Sleeper remaining weeks (FantasyPros first if `FANTASYPROS_API_KEY` is set), then ESPN season projection minus points scored. Research notes live in `docs/PREDICTION_MODELS.md`.
+Do not train a model unless asked. Start/sit averages ESPN + Sleeper this-week projections. Trade and waiver ROS defaults to Sleeper remaining weeks (FantasyPros first if `FANTASYPROS_API_KEY` is set), then ESPN season projection minus points scored. Research notes live in `docs/PREDICTION_MODELS.md`.

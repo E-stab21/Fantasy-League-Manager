@@ -9,6 +9,7 @@ from league_manager.market import DEFAULT_LOOKBACK, find_opportunities
 from league_manager.projections import league_scoring
 from league_manager.search import parse_kinds, search_trades
 from league_manager.serialize import matchup_to_dict, player_to_dict, team_to_dict
+from league_manager.advise import rank_waiver_claims
 from league_manager.trades import grade_trade
 from league_manager.value import (
     DEFAULT_SHORT_TERM_WEEKS,
@@ -295,6 +296,77 @@ class EspnClient:
             },
             "replacement_weekly": baselines,
             "players": [item.to_dict() for item in valued],
+        }
+
+    def waiver_advice(
+        self,
+        team_id: int | None = None,
+        *,
+        position: str | None = None,
+        size: int = 50,
+        limit: int = 10,
+        window: str = "auto",
+        short_term_weeks: int = DEFAULT_SHORT_TERM_WEEKS,
+        season_end_week: int | None = None,
+        sleeper: bool = True,
+    ) -> dict[str, Any]:
+        """Rank free-agent claims with the same ST/LT roster + lineup grade as trades."""
+        team = self.get_team(team_id)
+        context = context_from_league(
+            self.league,
+            team,
+            short_term_weeks=short_term_weeks,
+            season_end_week=season_end_week,
+        )
+        roster_payload = team_to_dict(team, include_roster=True)
+        roster = roster_payload.get("roster") or []
+        mixed_fa = self.free_agents(size=max(int(size), 50))
+        target_fa = self.free_agents(position=position, size=size) if position else mixed_fa
+        roster = self._enrich_players(
+            roster,
+            current_week=context.current_week,
+            season_end_week=context.season_end_week,
+            sleeper=sleeper,
+        )
+        mixed_fa = self._enrich_players(
+            mixed_fa,
+            current_week=context.current_week,
+            season_end_week=context.season_end_week,
+            sleeper=sleeper,
+        )
+        if position:
+            target_fa = self._enrich_players(
+                target_fa,
+                current_week=context.current_week,
+                season_end_week=context.season_end_week,
+                sleeper=sleeper,
+            )
+        else:
+            target_fa = mixed_fa
+        baselines = replacement_baselines(mixed_fa)
+        ranked = rank_waiver_claims(
+            roster,
+            target_fa,
+            context=context,
+            baselines=baselines,
+            window=window,
+            limit=limit,
+        )
+        return {
+            "team": {"id": roster_payload.get("id"), "name": roster_payload.get("name")},
+            "window": ranked["window"],
+            "weights": ranked["weights"],
+            "sources": self._ros_source_flags(sleeper=sleeper),
+            "context": {
+                "current_week": context.current_week,
+                "short_term_weeks": context.short_term_week_list,
+                "remaining_weeks": context.remaining_weeks,
+                "season_end_week": context.season_end_week,
+                "standing": context.standing,
+                "record": [context.wins, context.losses, context.ties],
+            },
+            "replacement_weekly": baselines,
+            "targets": ranked["targets"],
         }
 
     def trade_grade(

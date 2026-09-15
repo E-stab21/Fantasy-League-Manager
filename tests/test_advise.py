@@ -1,7 +1,8 @@
-from league_manager.advise import optimal_lineup, waiver_targets
+from league_manager.advise import optimal_lineup, rank_waiver_claims, waiver_targets
 from league_manager.projections import attach_sleeper_projections, primary_projection
 from league_manager.sleeper import normalize_name, projection_points
 from league_manager.slots import parse_slot
+from league_manager.value import LeagueContext
 
 
 def test_optimal_lineup_benches_injured_and_promotes_better_rb():
@@ -43,24 +44,162 @@ def test_optimal_lineup_benches_injured_and_promotes_better_rb():
 
 
 def test_waiver_targets_rank_upgrade():
+    context = LeagueContext(
+        current_week=2,
+        season_end_week=17,
+        wins=0,
+        losses=1,
+        standing=9,
+        playoff_team_count=6,
+        team_count=10,
+    )
     roster = [
+        {
+            "id": 1,
+            "name": "RB1",
+            "position": "RB",
+            "lineup_slot": "RB",
+            "lineup_slot_id": 2,
+            "projected_points": 16,
+            "projected_total_points": 240,
+            "points": 10,
+        },
+        {
+            "id": 2,
+            "name": "RB2",
+            "position": "RB",
+            "lineup_slot": "RB",
+            "lineup_slot_id": 2,
+            "projected_points": 14,
+            "projected_total_points": 210,
+            "points": 8,
+        },
         {
             "id": 9,
             "name": "Handcuff",
             "position": "RB",
             "lineup_slot": "BE",
             "lineup_slot_id": 20,
-            "projected_points": 4,
-        }
+            "projected_points": 10,
+            "projected_total_points": 40,
+            "points": 20,
+        },
+        {
+            "id": 3,
+            "name": "QB1",
+            "position": "QB",
+            "lineup_slot": "QB",
+            "lineup_slot_id": 0,
+            "projected_points": 20,
+            "projected_total_points": 300,
+            "points": 15,
+        },
+        {
+            "id": 4,
+            "name": "WR1",
+            "position": "WR",
+            "lineup_slot": "WR",
+            "lineup_slot_id": 4,
+            "projected_points": 18,
+            "projected_total_points": 270,
+            "points": 12,
+        },
+        {
+            "id": 5,
+            "name": "WR2",
+            "position": "WR",
+            "lineup_slot": "WR",
+            "lineup_slot_id": 4,
+            "projected_points": 13,
+            "projected_total_points": 200,
+            "points": 9,
+        },
+        {
+            "id": 6,
+            "name": "TE1",
+            "position": "TE",
+            "lineup_slot": "TE",
+            "lineup_slot_id": 6,
+            "projected_points": 10,
+            "projected_total_points": 160,
+            "points": 8,
+        },
+        {
+            "id": 7,
+            "name": "FLEX",
+            "position": "WR",
+            "lineup_slot": "FLEX",
+            "lineup_slot_id": 23,
+            "projected_points": 12,
+            "projected_total_points": 180,
+            "points": 7,
+        },
+        {
+            "id": 8,
+            "name": "DST",
+            "position": "D/ST",
+            "lineup_slot": "D/ST",
+            "lineup_slot_id": 16,
+            "projected_points": 7,
+            "projected_total_points": 100,
+            "points": 6,
+        },
+        {
+            "id": 10,
+            "name": "K",
+            "position": "K",
+            "lineup_slot": "K",
+            "lineup_slot_id": 17,
+            "projected_points": 8,
+            "projected_total_points": 110,
+            "points": 7,
+        },
     ]
     free_agents = [
-        {"id": 80, "name": "Waiver Star", "position": "RB", "projected_points": 14},
-        {"id": 81, "name": "Streamer", "position": "RB", "projected_points": 5},
+        {
+            "id": 80,
+            "name": "Waiver Star",
+            "position": "RB",
+            "projected_points": 8,
+            "projected_total_points": 200,
+            "points": 6,
+            "percent_owned": 70,
+        },
+        {
+            "id": 81,
+            "name": "Streamer",
+            "position": "RB",
+            "projected_points": 12,
+            "projected_total_points": 50,
+            "points": 15,
+            "percent_owned": 20,
+        },
     ]
-    targets = waiver_targets(roster, free_agents, limit=2)
+    baselines = {"RB": 8.0, "WR": 9.0, "QB": 14.0, "TE": 8.0, "K": 7.0, "D/ST": 6.0}
+    ranked = rank_waiver_claims(
+        roster,
+        free_agents,
+        context=context,
+        baselines=baselines,
+        window="auto",
+        limit=2,
+    )
+    assert ranked["window"] == "rebuilder"
+    assert ranked["weights"]["lt"] == 0.7
+    assert ranked["weights"]["roster"] == 0.6
+    targets = ranked["targets"]
     assert targets[0]["name"] == "Waiver Star"
     assert targets[0]["drop_candidate"] == "Handcuff"
-    assert targets[0]["delta"] == 10
+    assert "roster" in targets[0]
+    assert "lineup" in targets[0]
+    assert targets[0]["blended"] > targets[1]["blended"]
+    assert targets[0]["roster"]["delta_lt"] > 0
+    assert targets[0]["lineup"]["delta_st"] == 0
+    # Same helper still returns a list for older callers.
+    listed = waiver_targets(
+        roster, free_agents, context=context, baselines=baselines, window="auto", limit=2
+    )
+    assert listed[0]["name"] == "Waiver Star"
 
 
 def test_sleeper_name_overlay():

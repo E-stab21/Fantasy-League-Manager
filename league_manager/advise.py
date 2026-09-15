@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import Any
 
 from league_manager.projections import primary_projection, projection_source
@@ -13,6 +12,14 @@ from league_manager.slots import (
     parse_slot,
     player_fits_slot,
     slot_name,
+)
+from league_manager.trades import grade_valued_trade
+from league_manager.value import (
+    LeagueContext,
+    infer_window,
+    structure_weights,
+    value_player,
+    window_weights,
 )
 
 
@@ -152,45 +159,145 @@ def optimal_lineup(roster: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _is_bench(player: dict[str, Any]) -> bool:
+    slot = _slot_id(player)
+    if slot == IR_SLOT:
+        return False
+    return slot == BENCH_SLOT or not is_starter_slot(slot)
+
+
+def _side_snip(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not row:
+        return None
+    return {
+        "id": row.get("id"),
+        "name": row.get("name"),
+        "position": row.get("position"),
+        "weekly_rate": row.get("weekly_rate"),
+        "st_vorp": row.get("st_vorp"),
+        "lt_vorp": row.get("lt_vorp"),
+        "blended": row.get("blended"),
+        "ros_source": row.get("ros_source"),
+    }
+
+
+def _compact_claim_grade(grade: dict[str, Any]) -> dict[str, Any]:
+    lineup = grade.get("lineup") or {}
+    return {
+        "grade": grade.get("grade"),
+        "verdict": grade.get("verdict"),
+        "blended": grade.get("blended"),
+        "delta_st": grade.get("delta_st"),
+        "delta_lt": grade.get("delta_lt"),
+        "roster": grade.get("roster"),
+        "lineup": {
+            "mode": lineup.get("mode"),
+            "delta_st": lineup.get("delta_st"),
+            "delta_lt": lineup.get("delta_lt"),
+        },
+        "summary": grade.get("summary"),
+    }
+
+
+def rank_waiver_claims(
+    roster: list[dict[str, Any]],
+    free_agents: list[dict[str, Any]],
+    *,
+    context: LeagueContext,
+    baselines: dict[str, float],
+    window: str | None = None,
+    limit: int = 10,
+) -> dict[str, Any]:
+    """Rank add/drop claims with the same ST/LT roster + lineup math as trades."""
+    resolved = infer_window(context, window)
+    st_w, lt_w = window_weights(resolved)
+    roster_w, lineup_w = structure_weights(resolved)
+    valued = {
+        player["id"]: value_player(player, context, baselines, window=resolved)
+        for player in roster + free_agents
+        if player.get("id") is not None
+    }
+    drops = [player for player in roster if player.get("id") in valued and _is_bench(player)]
+    rows: list[dict[str, Any]] = []
+    seen: set[Any] = {player.get("id") for player in roster}
+
+    for agent in free_agents:
+        agent_id = agent.get("id")
+        if agent_id is None or agent_id in seen or agent_id not in valued:
+            continue
+        fa_pos = str(agent.get("position") or "")
+        best: dict[str, Any] | None = None
+        for drop in drops:
+            grade = grade_valued_trade(
+                send_values=[valued[drop["id"]]],
+                recv_values=[valued[agent_id]],
+                send_players=[drop],
+                recv_players=[agent],
+                context=context,
+                window=resolved,
+                our_roster=roster,
+                baselines=baselines,
+            )
+            compact = _compact_claim_grade(grade)
+            same_pos = str(drop.get("position") or "") == fa_pos
+            if best is None or compact["blended"] > best["blended"] or (
+                compact["blended"] == best["blended"] and same_pos and not best.get("same_position_drop")
+            ):
+                best = {
+                    **compact,
+                    "same_position_drop": same_pos,
+                    "drop_player": drop,
+                    "send": grade.get("send"),
+                    "receive": grade.get("receive"),
+                }
+        if best is None:
+            continue
+        drop = best["drop_player"]
+        rows.append(
+            {
+                "id": agent_id,
+                "name": agent.get("name"),
+                "position": fa_pos,
+                "percent_owned": agent.get("percent_owned"),
+                "drop_candidate": drop.get("name"),
+                "drop_candidate_id": drop.get("id"),
+                "drop_candidate_position": drop.get("position"),
+                "grade": best["grade"],
+                "verdict": best["verdict"],
+                "blended": best["blended"],
+                "delta_st": best["delta_st"],
+                "delta_lt": best["delta_lt"],
+                "roster": best["roster"],
+                "lineup": best["lineup"],
+                "why": best["summary"],
+                "add": _side_snip((best.get("receive") or [None])[0]),
+                "drop": _side_snip((best.get("send") or [None])[0]),
+            }
+        )
+
+    rows.sort(key=lambda row: (row["blended"], row.get("delta_lt") or 0), reverse=True)
+    return {
+        "window": resolved,
+        "weights": {"st": st_w, "lt": lt_w, "roster": roster_w, "lineup": lineup_w},
+        "targets": rows[:limit],
+    }
+
+
 def waiver_targets(
     roster: list[dict[str, Any]],
     free_agents: list[dict[str, Any]],
     *,
+    context: LeagueContext,
+    baselines: dict[str, float],
+    window: str | None = None,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
-    bench_by_pos: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for player in roster:
-        slot = _slot_id(player)
-        if slot == BENCH_SLOT or not is_starter_slot(slot):
-            bench_by_pos[str(player.get("position") or "")].append(player)
-    for group in bench_by_pos.values():
-        group.sort(key=primary_projection)
-
-    rows = []
-    for agent in free_agents:
-        pos = str(agent.get("position") or "")
-        replacement = (bench_by_pos.get(pos) or [None])[0]
-        replacement_pts = primary_projection(replacement) if replacement else 0.0
-        agent_pts = primary_projection(agent)
-        delta = agent_pts - replacement_pts
-        rows.append(
-            {
-                "id": agent.get("id"),
-                "name": agent.get("name"),
-                "position": pos,
-                "projected_points": agent_pts,
-                "sleeper_projected_points": agent.get("sleeper_projected_points"),
-                "percent_owned": agent.get("percent_owned"),
-                "drop_candidate": replacement.get("name") if replacement else None,
-                "drop_candidate_id": replacement.get("id") if replacement else None,
-                "drop_candidate_projection": replacement_pts if replacement else None,
-                "delta": round(delta, 2),
-                "reason": (
-                    f"+{delta:.1f} vs bench {replacement.get('name')}"
-                    if replacement and delta > 0
-                    else "watch list / streaming option"
-                ),
-            }
-        )
-    rows.sort(key=lambda row: (row["delta"], row["projected_points"] or 0), reverse=True)
-    return rows[:limit]
+    """Rank waiver adds using trade-grade surplus. Kept as a list for older callers."""
+    return rank_waiver_claims(
+        roster,
+        free_agents,
+        context=context,
+        baselines=baselines,
+        window=window,
+        limit=limit,
+    )["targets"]

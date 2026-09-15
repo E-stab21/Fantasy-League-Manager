@@ -157,6 +157,31 @@ def test_cli_reads_with_fake_league(monkeypatch, capsys):
     preview = json.loads(capsys.readouterr().out)
     assert preview["executed"] is False
     assert preview["payload"]["type"] == "FREEAGENT"
+    assert preview["grade"]["window"]
+    assert "blended" in preview["grade"]
+    assert preview["grade"]["receive"][0]["id"] == 99
+    assert preview["grade"]["send"][0]["id"] == 12
+
+    assert main(["claim", "--player", "99", "--drop", "12"]) == 0
+    claim = json.loads(capsys.readouterr().out)
+    assert claim["executed"] is False
+    assert claim["payload"]["type"] == "WAIVER"
+    assert claim["grade"]["blended"] is not None
+    assert "roster" in claim["grade"]
+    assert "lineup" in claim["grade"]
+
+    assert main(["waiver-advice", "--limit", "3"]) == 0
+    waivers = json.loads(capsys.readouterr().out)
+    assert waivers["window"]
+    assert "st" in waivers["weights"]
+    assert "lt" in waivers["weights"]
+    assert "roster" in waivers["weights"]
+    assert "lineup" in waivers["weights"]
+    assert waivers["targets"][0]["id"] == 99
+    assert waivers["targets"][0]["drop_candidate_id"] == 12
+    assert "blended" in waivers["targets"][0]
+    assert "roster" in waivers["targets"][0]
+    assert "lineup" in waivers["targets"][0]
 
     assert main(["values"]) == 0
     values = json.loads(capsys.readouterr().out)

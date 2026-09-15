@@ -7,7 +7,7 @@ import json
 import sys
 from typing import Any
 
-from league_manager.advise import optimal_lineup, waiver_targets
+from league_manager.advise import optimal_lineup
 from league_manager.config import ConfigError, auth_status, load_settings
 from league_manager.espn_client import EspnClient
 from league_manager.market import DEFAULT_LOOKBACK
@@ -212,23 +212,17 @@ def cmd_trade_search(args: argparse.Namespace) -> int:
 
 
 def cmd_waiver_advice(args: argparse.Namespace) -> int:
-    client = _client()
-    roster = client.roster(args.team_id)
-    free_agents = client.free_agents(position=args.position, size=args.size)
-    players = roster.get("roster") or []
-    if args.sleeper:
-        players = _attach_sleeper_week(players, client)
-        free_agents = _attach_sleeper_week(free_agents, client)
     return _print(
-        {
-            "team": {"id": roster.get("id"), "name": roster.get("name")},
-            "sources": {
-                "espn_week": True,
-                "sleeper_week": bool(args.sleeper),
-                "blend": "average" if args.sleeper else "espn",
-            },
-            "targets": waiver_targets(players, free_agents, limit=args.limit),
-        },
+        _client().waiver_advice(
+            args.team_id,
+            position=args.position,
+            size=args.size,
+            limit=args.limit,
+            window=args.window,
+            short_term_weeks=args.horizon,
+            season_end_week=args.season_end,
+            sleeper=args.sleeper,
+        ),
         args.format,
     )
 
@@ -270,7 +264,17 @@ def cmd_add(args: argparse.Namespace) -> int:
         waiver=False,
     )
     result = client.submit_transaction(payload, confirm=args.confirm, scoring_period_id=week)
-    return _print(result.to_dict(), args.format)
+    payload_out = result.to_dict()
+    if args.drop is not None:
+        try:
+            payload_out["grade"] = client.trade_grade(
+                [args.drop],
+                [args.player],
+                team_id=team_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - grade is additive on preview
+            payload_out["grade_error"] = str(exc)
+    return _print(payload_out, args.format)
 
 
 def cmd_drop(args: argparse.Namespace) -> int:
@@ -302,7 +306,17 @@ def cmd_claim(args: argparse.Namespace) -> int:
         bid_amount=args.bid,
     )
     result = client.submit_transaction(payload, confirm=args.confirm, scoring_period_id=week)
-    return _print(result.to_dict(), args.format)
+    payload_out = result.to_dict()
+    if args.drop is not None:
+        try:
+            payload_out["grade"] = client.trade_grade(
+                [args.drop],
+                [args.player],
+                team_id=team_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - grade is additive on preview
+            payload_out["grade_error"] = str(exc)
+    return _print(payload_out, args.format)
 
 
 def cmd_trade(args: argparse.Namespace) -> int:
@@ -484,15 +498,23 @@ def build_parser() -> argparse.ArgumentParser:
     _add_sleeper_flag(p, help_text="Use Sleeper remaining-week sums for ROS (default on)")
     p.set_defaults(func=cmd_opportunities)
 
-    p = sub.add_parser("waiver-advice", help="Rank free-agent adds vs your bench")
+    p = sub.add_parser(
+        "waiver-advice",
+        help="Rank free-agent add/drops with the same ST/LT roster + lineup grade as trades",
+    )
     p.add_argument("--team-id", type=int)
     p.add_argument("--position")
     p.add_argument("--size", type=int, default=50)
     p.add_argument("--limit", type=int, default=10)
-    _add_sleeper_flag(
-        p,
-        help_text="Average ESPN + Sleeper this-week projections (default on; --no-sleeper for ESPN only)",
+    p.add_argument(
+        "--window",
+        choices=("auto", "contender", "bubble", "rebuilder"),
+        default="auto",
+        help="How hard to weight the next few weeks vs rest of season",
     )
+    p.add_argument("--horizon", type=int, default=DEFAULT_SHORT_TERM_WEEKS, help="Short-term weeks")
+    p.add_argument("--season-end", type=int, dest="season_end", help="Last fantasy week (default 17)")
+    _add_sleeper_flag(p, help_text="Use Sleeper remaining-week sums for ROS (default on)")
     p.set_defaults(func=cmd_waiver_advice)
 
     p = sub.add_parser("set-lineup", help="Preview or submit lineup moves")
