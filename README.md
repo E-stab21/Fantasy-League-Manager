@@ -1,8 +1,10 @@
 # Fantasy League Manager
 
+Repository: [github.com/E-stab21/Fantasy-League-Manager](https://github.com/E-stab21/Fantasy-League-Manager)
+
 Cloud Agents spawned from this repo act as an ESPN fantasy league manager. They use the unofficial ESPN fantasy API with your session cookies, then recommend lineups and waivers from public projections.
 
-The original Chrome draft helper still lives in `Chrome_Extension/`. Weekly league management is now the `league` CLI.
+The original Chrome draft helper still lives in `chrome_extension/`. Weekly league management is now the `league` CLI.
 
 ## What a spawned agent does
 
