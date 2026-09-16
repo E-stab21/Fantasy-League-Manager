@@ -3,6 +3,7 @@ from league_manager.value import (
     infer_window,
     replacement_baselines,
     ros_points,
+    roster_cap_from_settings,
     value_player,
     weekly_rate,
 )
@@ -133,3 +134,22 @@ def test_espn_remainder_beats_flattening_this_week():
     assert remainder.ros_source == "espn_remainder"
     assert remainder.lt_points == 160
     assert remainder.lt_vorp > flat.lt_vorp
+
+
+def test_roster_cap_from_settings_skips_ir():
+    class _Settings:
+        position_slot_counts = {
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 1,
+            "D/ST": 1,
+            "K": 1,
+            "BE": 7,
+            "IR": 3,
+        }
+
+    assert roster_cap_from_settings(_Settings()) == 16
+    assert roster_cap_from_settings(None) is None
+    assert roster_cap_from_settings(object()) is None

@@ -1,6 +1,9 @@
 """Grade redraft trades with roster surplus and lineup surplus.
 
-Roster surplus = change in waiver-replacement VORP (asset pile).
+Roster surplus = after-trade VORP minus before-trade VORP (asset pile).
+On a full roster, extra incoming players force a drop of the lowest remaining
+VORP (not the players just received); that cut is priced like part of the trade.
+Empty spots after a net-loss deal are replacement-level (~0 VORP).
 Lineup surplus = change in optimal starting-lineup points (what you start).
 
 Both are computed for ST and LT, then mixed with horizon weights (contender /
@@ -81,6 +84,87 @@ def apply_trade_to_roster(
         row.setdefault("is_starter", False)
         after.append(row)
     return after
+
+
+def _is_ir(player: dict[str, Any]) -> bool:
+    return _slot_id(player) == IR_SLOT
+
+
+def _active_players(roster: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [player for player in roster if not _is_ir(player)]
+
+
+def resolve_roster_cap(roster: list[dict[str, Any]], context: LeagueContext) -> int:
+    """Active spots. League setting if known, else current occupancy (assume full)."""
+    if context.roster_cap is not None and int(context.roster_cap) > 0:
+        return int(context.roster_cap)
+    return len(_active_players(roster))
+
+
+def _drop_row(value: PlayerValue) -> dict[str, Any]:
+    return {
+        "id": value.id,
+        "name": value.name,
+        "position": value.position,
+        "st_vorp": round(value.st_vorp, 2),
+        "lt_vorp": round(value.lt_vorp, 2),
+        "blended": round(value.blended, 2),
+    }
+
+
+def _roster_vorp_totals(
+    roster: list[dict[str, Any]],
+    value_of,
+) -> tuple[float, float]:
+    st = lt = 0.0
+    seen: set[Any] = set()
+    for player in roster:
+        pid = player.get("id")
+        if pid is None or pid in seen:
+            continue
+        seen.add(pid)
+        value = value_of(player)
+        st += value.st_vorp
+        lt += value.lt_vorp
+    return st, lt
+
+
+def fit_roster_to_cap(
+    roster: list[dict[str, Any]],
+    *,
+    cap: int,
+    protected_ids: set[Any],
+    value_of,
+) -> tuple[list[dict[str, Any]], list[PlayerValue]]:
+    """Drop lowest-VORP leftovers until active size fits the cap.
+
+    Incoming receive players are protected so the trade is actually kept.
+    IR does not count toward the cap. Empty leftover spots are just absent
+    (replacement-level, ~0 VORP) — no phantom player is added.
+    """
+    after = list(roster)
+    dropped: list[PlayerValue] = []
+    if cap <= 0:
+        return after, dropped
+    keep_ids = set(protected_ids)
+    while len(_active_players(after)) > cap:
+        active = _active_players(after)
+        candidates = [player for player in active if player.get("id") not in keep_ids]
+        if not candidates:
+            candidates = list(active)
+        candidates.sort(
+            key=lambda player: (
+                value_of(player).blended,
+                1 if player.get("is_starter") else 0,
+                value_of(player).lt_vorp,
+                value_of(player).st_vorp,
+            )
+        )
+        cut = candidates[0]
+        cut_id = cut.get("id")
+        dropped.append(value_of(cut))
+        after = [player for player in after if player.get("id") != cut_id]
+    return after, dropped
 
 
 def _horizon_points(value: PlayerValue, horizon: str) -> float:
@@ -231,6 +315,10 @@ def grade_valued_trade(
     recv_lt = sum(item.lt_vorp for item in recv_values)
     roster_delta_st = recv_st - send_st
     roster_delta_lt = recv_lt - send_lt
+    dropped_values: list[PlayerValue] = []
+    roster_before_st = roster_before_lt = None
+    roster_after_st = roster_after_lt = None
+    roster_cap: int | None = None
 
     lineup_mode = "optimal"
     lineup_delta_st = 0.0
@@ -240,13 +328,44 @@ def grade_valued_trade(
     notes = [
         f"Redraft window is {window} (ST {st_w:.0%}/LT {lt_w:.0%}; "
         f"roster {roster_w:.0%}/lineup {lineup_w:.0%}).",
-        "Roster surplus uses waiver replacement VORP; lineup surplus uses starting XI points.",
+        "Roster surplus is after minus before (waiver-replacement VORP); "
+        "lineup surplus uses starting XI points.",
     ]
 
     if our_roster and baselines is not None:
+        valued_cache = {item.id: item for item in send_values + recv_values}
+
+        def value_of(player: dict[str, Any]) -> PlayerValue:
+            pid = player.get("id")
+            if pid in valued_cache:
+                return valued_cache[pid]
+            valued = value_player(player, context, baselines, window=window)
+            valued_cache[pid] = valued
+            return valued
+
         slots = starter_slot_template(our_roster)
         before = list(our_roster)
-        after = apply_trade_to_roster(before, send_players, recv_players)
+        raw_after = apply_trade_to_roster(before, send_players, recv_players)
+        roster_cap = resolve_roster_cap(before, context)
+        after, dropped_values = fit_roster_to_cap(
+            raw_after,
+            cap=roster_cap,
+            protected_ids={player.get("id") for player in recv_players},
+            value_of=value_of,
+        )
+        roster_before_st, roster_before_lt = _roster_vorp_totals(before, value_of)
+        roster_after_st, roster_after_lt = _roster_vorp_totals(after, value_of)
+        roster_delta_st = roster_after_st - roster_before_st
+        roster_delta_lt = roster_after_lt - roster_before_lt
+        if dropped_values:
+            drop_names = ", ".join(
+                f"{item.name or item.id} ({item.position})" for item in dropped_values
+            )
+            notes.append(
+                f"Roster is full ({roster_cap} active spots); dropping {drop_names} "
+                "so the extra incoming player(s) fit. Their VORP is in roster surplus "
+                "(after minus before), as if they were on the send side."
+            )
         before_st, lineup_before_st = optimal_lineup_points(
             before, context=context, baselines=baselines, window=window, horizon="st", slot_template=slots
         )
@@ -307,9 +426,15 @@ def grade_valued_trade(
         "blended": round(blended, 2),
         "delta_st": round(delta_st, 2),
         "delta_lt": round(delta_lt, 2),
+        "dropped": [_drop_row(item) for item in dropped_values],
         "roster": {
             "delta_st": round(roster_delta_st, 2),
             "delta_lt": round(roster_delta_lt, 2),
+            "before_st": None if roster_before_st is None else round(roster_before_st, 2),
+            "before_lt": None if roster_before_lt is None else round(roster_before_lt, 2),
+            "after_st": None if roster_after_st is None else round(roster_after_st, 2),
+            "after_lt": None if roster_after_lt is None else round(roster_after_lt, 2),
+            "cap": roster_cap,
         },
         "lineup": {
             "mode": lineup_mode,
@@ -333,6 +458,7 @@ def grade_valued_trade(
             lineup_delta_st,
             lineup_delta_lt,
             blended,
+            dropped_values,
         ),
     }
 
@@ -382,9 +508,14 @@ def _summary(
     lineup_st: float,
     lineup_lt: float,
     blended: float,
+    dropped: list[PlayerValue] | None = None,
 ) -> str:
+    drop_bit = ""
+    if dropped:
+        names = ", ".join(str(item.name or item.id) for item in dropped)
+        drop_bit = f"; drop {names} to stay at cap"
     return (
         f"As a {window}: roster ST {roster_st:+.1f} / LT {roster_lt:+.1f}; "
         f"lineup ST {lineup_st:+.1f} / LT {lineup_lt:+.1f} "
-        f"(blended {blended:+.1f})."
+        f"(blended {blended:+.1f}){drop_bit}."
     )
