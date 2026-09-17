@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "bash:pip",
+      "bash:python"
+    ]
+  },
+  "env": {
+    "PYTHONUNBUFFERED": "1"
+  }
+}
