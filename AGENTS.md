@@ -43,7 +43,7 @@ Only add `--confirm` after showing the preview and getting a clear go-ahead.
 - Start/sit averages ESPN + Sleeper this-week projections (`lineup-advice`). Use `--no-sleeper` for ESPN only.
 - For trades **and waivers**, do **not** flatten this week across the rest of the year if a real ROS number exists. LT prefers FantasyPros ROS (when `FANTASYPROS_API_KEY` is set), then Sleeper remaining-week sums (default), then ESPN season projection minus points scored, then weekly × games left. See `docs/PREDICTION_MODELS.md`.
 - Run `trade-calibrate` periodically to sample comparable redraft accepts and optionally `--apply` a higher top band. Accepts calibrate the search band only — never bake them into VORP.
-- Run `trade-search` / `trade-grade` using roster + lineup surplus (ST/LT each). Prefer deals inside the realism band. ESPN face still gauges whether the other manager might accept.
+- Run `trade-search` / `trade-grade` using roster + lineup surplus (ST/LT each). Full-roster 1:2 (and any net-add) prices the forced drop's VORP as after minus before. Prefer deals inside the realism band. ESPN face still gauges whether the other manager might accept.
 - Run `waiver-advice` with the same surplus math as a 1:1 trade (add vs best bench drop). `claim` / `add` attach that grade on preview.
 
 - Buy-low / sell-high compares the last few *actual* games to the weekly projection other managers saw. Recency is the market signal, not a second projection.

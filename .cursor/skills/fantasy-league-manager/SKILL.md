@@ -52,7 +52,7 @@ python3 -m league_manager trade-search
 python3 -m league_manager trade-grade --send 111,222 --receive 333
 ```
 
-`--window` can be `auto`, `contender`, `bubble`, or `rebuilder`. Auto uses record and standings. ST is the next `--horizon` weeks (default 3). LT prefers FantasyPros ROS, Sleeper remaining weeks (default), or ESPN season remainder over flattening this week. `trade-search` walks 1:1 / 2:1 / 1:2 / 2:2 against every roster and keeps packages inside a realism band (default blended ~1–40; `trade-calibrate --apply` can raise the top). Grades mix **roster VORP** and **lineup surplus** (optimal start/sit before vs after). Accepted public trades set the band only — they do **not** change VORP pricing. Grade before proposing; `league trade` attaches the same grade on preview.
+`--window` can be `auto`, `contender`, `bubble`, or `rebuilder`. Auto uses record and standings. ST is the next `--horizon` weeks (default 3). LT prefers FantasyPros ROS, Sleeper remaining weeks (default), or ESPN season remainder over flattening this week. `trade-search` walks 1:1 / 2:1 / 1:2 / 2:2 against other rosters and keeps packages inside a realism band (default blended ~1–40; `trade-calibrate --apply` can raise the top). Grades mix **roster VORP** (after minus before, including a forced drop on a full roster when you net extra players) and **lineup surplus** (optimal start/sit before vs after). Accepted public trades set the band only — they do **not** change VORP pricing. Grade before proposing; `league trade` attaches the same grade on preview.
 
 ```bash
 python3 -m league_manager trade-calibrate

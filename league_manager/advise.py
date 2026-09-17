@@ -190,6 +190,7 @@ def _compact_claim_grade(grade: dict[str, Any]) -> dict[str, Any]:
         "delta_st": grade.get("delta_st"),
         "delta_lt": grade.get("delta_lt"),
         "roster": grade.get("roster"),
+        "dropped": grade.get("dropped") or [],
         "lineup": {
             "mode": lineup.get("mode"),
             "delta_st": lineup.get("delta_st"),

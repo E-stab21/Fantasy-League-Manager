@@ -142,8 +142,13 @@ def _why(
 ) -> str:
     send_names = ", ".join(str(player.get("name")) for player in send)
     recv_names = ", ".join(str(player.get("name")) for player in recv)
+    dropped = grade.get("dropped") or []
+    drop_bit = ""
+    if dropped:
+        drop_names = ", ".join(str(row.get("name") or row.get("id")) for row in dropped)
+        drop_bit = f" Drop {drop_names} to stay at cap."
     return (
-        f"Send {send_names} for {recv_names}. {grade['summary']} "
+        f"Send {send_names} for {recv_names}.{drop_bit} {grade['summary']} "
         f"ESPN face for them {their_face_net:+.1f}; their ROS VORP net {their_lt_net:+.1f}."
     )
 
@@ -238,6 +243,7 @@ def search_trades(
                 "delta_st": grade["delta_st"],
                 "delta_lt": grade["delta_lt"],
                 "roster": grade.get("roster"),
+                "dropped": grade.get("dropped") or [],
                 "lineup": {
                     "delta_st": (grade.get("lineup") or {}).get("delta_st"),
                     "delta_lt": (grade.get("lineup") or {}).get("delta_lt"),

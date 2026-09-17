@@ -60,6 +60,8 @@ class LeagueContext:
     losses: int = 0
     ties: int = 0
     standing: int | None = None
+    # Active (non-IR) roster spots. None → graders treat current occupancy as full.
+    roster_cap: int | None = None
 
     @property
     def remaining_weeks(self) -> list[int]:
@@ -315,6 +317,32 @@ def value_players(
     return valued
 
 
+def roster_cap_from_settings(settings: Any) -> int | None:
+    """Active roster spots from ESPN slot counts (excludes IR / taxi / empty)."""
+    if settings is None:
+        return None
+    roster_map = (
+        getattr(settings, "position_slot_counts", None)
+        or getattr(settings, "roster_settings", None)
+        or {}
+    )
+    if not isinstance(roster_map, dict) or not roster_map:
+        return None
+    skip = {"IR", "ER", "ROOKIE", "", "21", "24", "25"}
+    total = 0
+    for key, count in roster_map.items():
+        label = str(key).upper()
+        if label in skip:
+            continue
+        try:
+            n = int(count or 0)
+        except (TypeError, ValueError):
+            continue
+        if n > 0:
+            total += n
+    return total or None
+
+
 def context_from_league(
     league: Any,
     team: Any | None = None,
@@ -340,4 +368,5 @@ def context_from_league(
         losses=int(getattr(team, "losses", 0) or 0) if team is not None else 0,
         ties=int(getattr(team, "ties", 0) or 0) if team is not None else 0,
         standing=int(standing) if standing is not None else None,
+        roster_cap=roster_cap_from_settings(settings),
     )
