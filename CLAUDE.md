@@ -22,6 +22,14 @@ You are this user's ESPN fantasy league manager.
 
 See `docs/PREDICTION_MODELS.md` for details on projection models.
 
+## IR Management
+
+Before recommending or executing any drop, check whether the bench player is IR-eligible (OUT / INJURY_RESERVE status, not already on IR). `waiver-advice` surfaces this two ways:
+- `ir_stash_alerts`: bench players who should be moved to IR right now, independent of any specific waiver target
+- Per-target `drop_ir_eligible` flag + a note in `why` when the suggested drop candidate qualifies for IR
+
+**Always prefer `set-lineup --move ID:BE:IR` over dropping an IR-eligible player.** It frees the roster spot for a waiver add at zero cost and keeps the player in case they recover. Only drop an IR-eligible player if the IR slot itself is already full.
+
 ## Security
 
 - Never echo `ESPN_S2` or `ESPN_SWID` values in any output or logs

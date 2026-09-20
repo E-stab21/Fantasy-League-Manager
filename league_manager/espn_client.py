@@ -366,6 +366,7 @@ class EspnClient:
                 "record": [context.wins, context.losses, context.ties],
             },
             "replacement_weekly": baselines,
+            "ir_stash_alerts": ranked.get("ir_stash_alerts", []),
             "targets": ranked["targets"],
         }
 

@@ -44,6 +44,8 @@ python3 -m league_manager claim --player ID --drop ID
 
 `waiver-advice` grades each free agent as a 1:1 add/drop using the same ST/LT roster VORP and lineup surplus as `trade-grade`. It pairs the add with the bench drop that maximizes blended surplus. `claim` and `add` attach that grade on preview. `--window` can be `auto`, `contender`, `bubble`, or `rebuilder`.
 
+`waiver-advice` output also includes `ir_stash_alerts`: bench players who are OUT/IR-status and not yet parked on IR. Check this before recommending any drop — a `BE` player who is IR-eligible should go to IR (`set-lineup --move ID:BE:IR`) to free the spot for free, not get cut. If a suggested drop target has `drop_ir_eligible: true`, move that player to IR first, then `add`/`claim` into the opened spot instead of a straight add/drop.
+
 ## Trades (redraft)
 
 ```bash

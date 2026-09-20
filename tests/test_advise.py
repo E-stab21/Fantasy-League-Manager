@@ -1,4 +1,9 @@
-from league_manager.advise import optimal_lineup, rank_waiver_claims, waiver_targets
+from league_manager.advise import (
+    ir_stash_alerts,
+    optimal_lineup,
+    rank_waiver_claims,
+    waiver_targets,
+)
 from league_manager.projections import attach_sleeper_projections, primary_projection
 from league_manager.sleeper import normalize_name, projection_points
 from league_manager.slots import parse_slot
@@ -228,3 +233,108 @@ def test_primary_projection_averages_when_both_present():
     assert primary_projection({"projected_points": 10}) == 10
     assert primary_projection({"sleeper_projected_points": 20}) == 20
     assert primary_projection({}) == 0.0
+
+
+def test_ir_stash_alerts_flags_out_bench_player_not_on_ir():
+    roster = [
+        {
+            "id": 1,
+            "name": "Starter",
+            "position": "RB",
+            "lineup_slot": "RB",
+            "lineup_slot_id": 2,
+            "injured": False,
+            "injury_status": "ACTIVE",
+        },
+        {
+            "id": 2,
+            "name": "Hurt Bench Guy",
+            "position": "WR",
+            "lineup_slot": "BE",
+            "lineup_slot_id": 20,
+            "injured": True,
+            "injury_status": "OUT",
+        },
+        {
+            "id": 3,
+            "name": "Already Stashed",
+            "position": "WR",
+            "lineup_slot": "IR",
+            "lineup_slot_id": 21,
+            "injured": True,
+            "injury_status": "OUT",
+        },
+        {
+            "id": 4,
+            "name": "Just Questionable",
+            "position": "RB",
+            "lineup_slot": "BE",
+            "lineup_slot_id": 20,
+            "injured": False,
+            "injury_status": "QUESTIONABLE",
+        },
+    ]
+    alerts = ir_stash_alerts(roster)
+    assert [a["id"] for a in alerts] == [2]
+    assert alerts[0]["injury_status"] == "OUT"
+
+
+def test_rank_waiver_claims_surfaces_ir_alert_and_flags_drop():
+    context = LeagueContext(
+        current_week=2,
+        season_end_week=17,
+        wins=0,
+        losses=1,
+        standing=9,
+        playoff_team_count=6,
+        team_count=10,
+    )
+    roster = [
+        {
+            "id": 1,
+            "name": "RB1",
+            "position": "RB",
+            "lineup_slot": "RB",
+            "lineup_slot_id": 2,
+            "projected_points": 16,
+            "projected_total_points": 240,
+            "points": 10,
+        },
+        {
+            "id": 2,
+            "name": "Injured Bench WR",
+            "position": "WR",
+            "lineup_slot": "BE",
+            "lineup_slot_id": 20,
+            "projected_points": 2,
+            "projected_total_points": 30,
+            "points": 1,
+            "injured": True,
+            "injury_status": "OUT",
+        },
+    ]
+    free_agents = [
+        {
+            "id": 80,
+            "name": "Waiver Star",
+            "position": "WR",
+            "projected_points": 12,
+            "projected_total_points": 200,
+            "points": 10,
+            "percent_owned": 70,
+        },
+    ]
+    baselines = {"RB": 8.0, "WR": 9.0, "QB": 14.0, "TE": 8.0, "K": 7.0, "D/ST": 6.0}
+    ranked = rank_waiver_claims(
+        roster,
+        free_agents,
+        context=context,
+        baselines=baselines,
+        window="auto",
+        limit=2,
+    )
+    assert [a["id"] for a in ranked["ir_stash_alerts"]] == [2]
+    target = ranked["targets"][0]
+    assert target["drop_candidate_id"] == 2
+    assert target["drop_ir_eligible"] is True
+    assert "IR-eligible" in target["why"]

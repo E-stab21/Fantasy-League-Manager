@@ -166,6 +166,36 @@ def _is_bench(player: dict[str, Any]) -> bool:
     return slot == BENCH_SLOT or not is_starter_slot(slot)
 
 
+IR_ELIGIBLE_STATUSES = {"OUT", "INJURY_RESERVE", "IR"}
+
+
+def _ir_eligible(player: dict[str, Any]) -> bool:
+    """Bench player ESPN will likely let onto IR (not already there)."""
+    if _slot_id(player) == IR_SLOT:
+        return False
+    status = str(player.get("injury_status") or "").upper()
+    return player.get("injured") is True and status in IR_ELIGIBLE_STATUSES
+
+
+def ir_stash_alerts(roster: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Bench players sitting OUT/IR-status that could move to IR to free a roster spot.
+
+    Independent of any specific waiver target so it surfaces even when no add
+    clears the surplus bar — the point is to not silently hold a dead roster
+    spot when a free IR slot is sitting right there.
+    """
+    return [
+        {
+            "id": player.get("id"),
+            "name": player.get("name"),
+            "position": player.get("position"),
+            "injury_status": player.get("injury_status"),
+        }
+        for player in roster
+        if _is_bench(player) and _ir_eligible(player)
+    ]
+
+
 def _side_snip(row: dict[str, Any] | None) -> dict[str, Any] | None:
     if not row:
         return None
@@ -254,6 +284,13 @@ def rank_waiver_claims(
         if best is None:
             continue
         drop = best["drop_player"]
+        drop_ir_eligible = _ir_eligible(drop)
+        why = best["summary"]
+        if drop_ir_eligible:
+            why = (
+                f"{drop.get('name')} is {drop.get('injury_status')} and IR-eligible — "
+                f"move to IR instead of dropping, then add for free. {why}"
+            )
         rows.append(
             {
                 "id": agent_id,
@@ -263,6 +300,7 @@ def rank_waiver_claims(
                 "drop_candidate": drop.get("name"),
                 "drop_candidate_id": drop.get("id"),
                 "drop_candidate_position": drop.get("position"),
+                "drop_ir_eligible": drop_ir_eligible,
                 "grade": best["grade"],
                 "verdict": best["verdict"],
                 "blended": best["blended"],
@@ -270,7 +308,7 @@ def rank_waiver_claims(
                 "delta_lt": best["delta_lt"],
                 "roster": best["roster"],
                 "lineup": best["lineup"],
-                "why": best["summary"],
+                "why": why,
                 "add": _side_snip((best.get("receive") or [None])[0]),
                 "drop": _side_snip((best.get("send") or [None])[0]),
             }
@@ -280,6 +318,7 @@ def rank_waiver_claims(
     return {
         "window": resolved,
         "weights": {"st": st_w, "lt": lt_w, "roster": roster_w, "lineup": lineup_w},
+        "ir_stash_alerts": ir_stash_alerts(roster),
         "targets": rows[:limit],
     }
 
