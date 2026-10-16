@@ -4,22 +4,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from league_manager.projections import primary_projection, projection_source
+from league_manager.projections import projection_source
 from league_manager.slots import (
     BENCH_SLOT,
     IR_SLOT,
     is_starter_slot,
+    slot_eligibility_size,
     parse_slot,
     player_fits_slot,
     slot_name,
 )
+from league_manager.leverage import week_weights
 from league_manager.trades import grade_valued_trade
 from league_manager.value import (
     LeagueContext,
     infer_window,
     structure_weights,
     value_player,
-    window_weights,
+    weekly_projection_curve,
 )
 
 
@@ -33,7 +35,13 @@ def _slot_id(player: dict[str, Any]) -> int | None:
     return int(raw) if raw is not None else None
 
 
-def _sit_reason(player: dict[str, Any]) -> str:
+def _sit_reason(player: dict[str, Any], *, playing: bool = True) -> str:
+    if not playing:
+        # A bye carries no injury status at all, so this has to come first.
+        status = str(player.get("injury_status") or "").upper()
+        if status in {"OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION"}:
+            return f"not playing this week ({status})"
+        return "not playing this week (bye or inactive)"
     if player.get("injured"):
         return "injured"
     status = str(player.get("injury_status") or "").upper()
@@ -42,18 +50,44 @@ def _sit_reason(player: dict[str, Any]) -> str:
     return "lower projection than a bench replacement"
 
 
-def optimal_lineup(roster: list[dict[str, Any]]) -> dict[str, Any]:
-    """Fill each starting slot with the highest remaining eligible projection."""
-    starter_slots = [
-        slot
-        for slot in (_slot_id(player) for player in roster)
-        if slot is not None and is_starter_slot(slot)
-    ]
-    available = [
-        player
-        for player in roster
-        if _slot_id(player) != IR_SLOT and not player.get("injured")
-    ]
+def optimal_lineup(
+    roster: list[dict[str, Any]],
+    *,
+    context: LeagueContext,
+) -> dict[str, Any]:
+    """Fill each starting slot with the highest remaining eligible projection.
+
+    Slots are filled most restrictive first, so a FLEX cannot take the best WR
+    out from under a WR slot that is filled later (`slot_eligibility_size`).
+
+    Availability comes from this week's per-week projection rather than the
+    `injured` flag: the flag goes stale, and players carrying it are routinely
+    still projected to play. A player the sources leave out of this week, or
+    discount to nothing, is not a candidate.
+    """
+    starter_slots = sorted(
+        (
+            slot
+            for slot in (_slot_id(player) for player in roster)
+            if slot is not None and is_starter_slot(slot)
+        ),
+        key=slot_eligibility_size,
+    )
+    week = int(context.current_week)
+    available = []
+    this_week: dict[Any, float] = {}
+    for player in roster:
+        if _slot_id(player) == IR_SLOT:
+            continue
+        curve, _ = weekly_projection_curve(player, context)
+        points = curve.get(week)
+        if not points:
+            continue
+        this_week[player.get("id")] = points
+        available.append(player)
+
+    def _score(player: dict[str, Any]) -> float:
+        return this_week.get(player.get("id"), 0.0)
     assigned: set[Any] = set()
     recommended: list[dict[str, Any]] = []
     for slot in starter_slots:
@@ -63,7 +97,7 @@ def optimal_lineup(roster: list[dict[str, Any]]) -> dict[str, Any]:
             if player.get("id") not in assigned
             and player_fits_slot(str(player.get("position") or ""), slot)
         ]
-        candidates.sort(key=primary_projection, reverse=True)
+        candidates.sort(key=_score, reverse=True)
         if not candidates:
             continue
         pick = candidates[0]
@@ -73,7 +107,7 @@ def optimal_lineup(roster: list[dict[str, Any]]) -> dict[str, Any]:
                 **pick,
                 "recommended_slot_id": slot,
                 "recommended_slot": slot_name(slot),
-                "projection": primary_projection(pick),
+                "projection": round(_score(pick), 2),
                 "espn_projection": pick.get("projected_points"),
                 "sleeper_projection": pick.get("sleeper_projected_points"),
                 "projection_source": projection_source(pick),
@@ -90,8 +124,10 @@ def optimal_lineup(roster: list[dict[str, Any]]) -> dict[str, Any]:
             "name": player.get("name"),
             "position": player.get("position"),
             "slot": player.get("lineup_slot"),
-            "projection": primary_projection(player),
-            "reason": _sit_reason(player),
+            "projection": round(_score(player), 2),
+            "reason": _sit_reason(
+                player, playing=player.get("id") in this_week
+            ),
         }
         for player in current_starters
         if player.get("id") not in recommended_ids
@@ -141,7 +177,9 @@ def optimal_lineup(roster: list[dict[str, Any]]) -> dict[str, Any]:
             }
         )
 
-    current_total = sum(primary_projection(player) for player in current_starters)
+    # Both sides must be scored the same way or the delta is meaningless. A
+    # current starter who is not playing this week scores 0, which is the point.
+    current_total = sum(_score(player) for player in current_starters)
     recommended_total = sum(float(item["projection"]) for item in recommended)
     return {
         "current_projected": round(current_total, 2),
@@ -164,6 +202,36 @@ def _is_bench(player: dict[str, Any]) -> bool:
     if slot == IR_SLOT:
         return False
     return slot == BENCH_SLOT or not is_starter_slot(slot)
+
+
+IR_ELIGIBLE_STATUSES = {"OUT", "INJURY_RESERVE", "IR"}
+
+
+def _ir_eligible(player: dict[str, Any]) -> bool:
+    """Bench player ESPN will likely let onto IR (not already there)."""
+    if _slot_id(player) == IR_SLOT:
+        return False
+    status = str(player.get("injury_status") or "").upper()
+    return player.get("injured") is True and status in IR_ELIGIBLE_STATUSES
+
+
+def ir_stash_alerts(roster: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Bench players sitting OUT/IR-status that could move to IR to free a roster spot.
+
+    Independent of any specific waiver target so it surfaces even when no add
+    clears the surplus bar — the point is to not silently hold a dead roster
+    spot when a free IR slot is sitting right there.
+    """
+    return [
+        {
+            "id": player.get("id"),
+            "name": player.get("name"),
+            "position": player.get("position"),
+            "injury_status": player.get("injury_status"),
+        }
+        for player in roster
+        if _is_bench(player) and _ir_eligible(player)
+    ]
 
 
 def _side_snip(row: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -211,13 +279,16 @@ def rank_waiver_claims(
 ) -> dict[str, Any]:
     """Rank add/drop claims with the same ST/LT roster + lineup math as trades."""
     resolved = infer_window(context, window)
-    st_w, lt_w = window_weights(resolved)
+    weights = week_weights(context)
+    st_w = weights.mass(context.short_term_week_list)
+    lt_w = max(0.0, 1.0 - st_w)
     roster_w, lineup_w = structure_weights(resolved)
     valued = {
-        player["id"]: value_player(player, context, baselines, window=resolved)
+        player["id"]: value_player(player, context, baselines, window=resolved, weights=weights)
         for player in roster + free_agents
         if player.get("id") is not None
     }
+    curve_cache: dict[Any, dict[int, float | None]] = {}
     drops = [player for player in roster if player.get("id") in valued and _is_bench(player)]
     rows: list[dict[str, Any]] = []
     seen: set[Any] = {player.get("id") for player in roster}
@@ -238,6 +309,8 @@ def rank_waiver_claims(
                 window=resolved,
                 our_roster=roster,
                 baselines=baselines,
+                weights=weights,
+                curve_cache=curve_cache,
             )
             compact = _compact_claim_grade(grade)
             same_pos = str(drop.get("position") or "") == fa_pos
@@ -254,6 +327,13 @@ def rank_waiver_claims(
         if best is None:
             continue
         drop = best["drop_player"]
+        drop_ir_eligible = _ir_eligible(drop)
+        why = best["summary"]
+        if drop_ir_eligible:
+            why = (
+                f"{drop.get('name')} is {drop.get('injury_status')} and IR-eligible — "
+                f"move to IR instead of dropping, then add for free. {why}"
+            )
         rows.append(
             {
                 "id": agent_id,
@@ -263,6 +343,7 @@ def rank_waiver_claims(
                 "drop_candidate": drop.get("name"),
                 "drop_candidate_id": drop.get("id"),
                 "drop_candidate_position": drop.get("position"),
+                "drop_ir_eligible": drop_ir_eligible,
                 "grade": best["grade"],
                 "verdict": best["verdict"],
                 "blended": best["blended"],
@@ -270,7 +351,7 @@ def rank_waiver_claims(
                 "delta_lt": best["delta_lt"],
                 "roster": best["roster"],
                 "lineup": best["lineup"],
-                "why": best["summary"],
+                "why": why,
                 "add": _side_snip((best.get("receive") or [None])[0]),
                 "drop": _side_snip((best.get("send") or [None])[0]),
             }
@@ -279,7 +360,15 @@ def rank_waiver_claims(
     rows.sort(key=lambda row: (row["blended"], row.get("delta_lt") or 0), reverse=True)
     return {
         "window": resolved,
-        "weights": {"st": st_w, "lt": lt_w, "roster": roster_w, "lineup": lineup_w},
+        "weights": {
+            "st": round(st_w, 4),
+            "lt": round(lt_w, 4),
+            "roster": roster_w,
+            "lineup": lineup_w,
+            "scheme": weights.scheme,
+            "playoff_odds": round(weights.playoff_odds, 3),
+        },
+        "ir_stash_alerts": ir_stash_alerts(roster),
         "targets": rows[:limit],
     }
 

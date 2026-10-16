@@ -114,6 +114,35 @@ def cached_week_projections(
     return data
 
 
+def remaining_week_series(
+    season: int,
+    current_week: int,
+    through: int = 17,
+    *,
+    scoring: str = "ppr",
+    http_get=None,
+    week_maps: dict[int, Any] | None = None,
+) -> dict[str, dict[int, float]]:
+    """Per-week projections for the remaining weeks, keyed by Sleeper player id.
+
+    Keeps the week-by-week shape rather than collapsing it, so values can weight
+    each week separately. Same cached fetches `remaining_week_totals` uses.
+    """
+    series: dict[str, dict[int, float]] = {}
+    start = max(int(current_week), 1)
+    end = max(int(through), start)
+    for week in range(start, end + 1):
+        raw = week_maps[week] if week_maps is not None else cached_week_projections(
+            season, week, http_get=http_get
+        )
+        for player_id, entry in as_projection_map(raw).items():
+            points = projection_points(entry, scoring)
+            if points is None:
+                continue
+            series.setdefault(player_id, {})[week] = float(points)
+    return series
+
+
 def remaining_week_totals(
     season: int,
     current_week: int,
@@ -123,17 +152,15 @@ def remaining_week_totals(
     http_get=None,
     week_maps: dict[int, Any] | None = None,
 ) -> dict[str, float]:
-    totals: dict[str, float] = {}
-    start = max(int(current_week), 1)
-    end = max(int(through), start)
-    for week in range(start, end + 1):
-        raw = week_maps[week] if week_maps is not None else cached_week_projections(
-            season, week, http_get=http_get
-        )
-        for player_id, entry in as_projection_map(raw).items():
-            points = projection_points(entry, scoring) or 0.0
-            totals[player_id] = totals.get(player_id, 0.0) + points
-    return totals
+    series = remaining_week_series(
+        season,
+        current_week,
+        through,
+        scoring=scoring,
+        http_get=http_get,
+        week_maps=week_maps,
+    )
+    return {player_id: sum(weeks.values()) for player_id, weeks in series.items()}
 
 
 def projection_points(entry: dict[str, Any], scoring: str = "ppr") -> float | None:

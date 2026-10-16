@@ -203,7 +203,7 @@ def test_search_drops_smash_spot_even_if_espn_face_is_close():
         window="bubble",
         kinds=("1:1",),
         max_surplus=16.0,
-        min_their_lt=-18.0,
+        min_their_lt=-10.0,
     )
     assert result["considered"] == 1
     assert result["trades"] == []

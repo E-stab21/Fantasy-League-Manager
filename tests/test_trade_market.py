@@ -60,14 +60,14 @@ def test_recommend_band_raises_top_when_accepts_are_fatter(tmp_path: Path):
     ]
     rec = recommend_band(win_sides, current, min_sample=8)
     assert rec["changed"] is True
-    # One-step cap: +20 from current, even if p75 is higher.
-    assert rec["recommended"]["max_surplus"] == 40.0
+    # One-step cap: +4 from current, even if p75 is higher.
+    assert rec["recommended"]["max_surplus"] == 24.0
     assert rec["recommended"]["min_their_face"] <= current.min_their_face
 
     path = tmp_path / "band.json"
     save_band(Band(**{k: rec["recommended"][k] for k in Band().__dict__}), path=path)
     loaded = active_band(path)
-    assert loaded.max_surplus == 40.0
+    assert loaded.max_surplus == 24.0
 
 
 def test_player_market_insights_demand_signal():

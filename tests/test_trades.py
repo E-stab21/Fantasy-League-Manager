@@ -1,3 +1,5 @@
+import pytest
+
 from league_manager.trades import grade_trade, grade_valued_trade, letter_grade
 from league_manager.value import LeagueContext, PlayerValue, value_player
 
@@ -218,7 +220,7 @@ def test_starter_floor_mode_without_roster():
     assert grade["roster"]["delta_st"] != 0 or grade["lineup"]["delta_st"] != 0
 
 
-def test_rebuilder_weights_rest_of_season_more():
+def test_losing_record_weights_the_games_in_front_of_you():
     baselines = {"RB": 8.0, "WR": 8.0, "QB": 12.0, "TE": 5.0, "K": 5.0, "D/ST": 5.0}
     players = _players()
     players[4] = {
@@ -249,8 +251,17 @@ def test_rebuilder_weights_rest_of_season_more():
         window="contender",
         our_roster=_roster(players, roster_ids),
     )
-    assert rebuild["weights"]["lt"] > contend["weights"]["lt"]
-    assert rebuild["blended"] > contend["blended"]
+    # A losing team is unlikely to reach the playoff weeks, so the weight sits
+    # on the games it still has to win. A contender weights those playoff weeks
+    # instead. This is the inverse of the old record-keyed window weighting.
+    assert rebuild["weights"]["st"] > contend["weights"]["st"]
+    assert contend["weights"]["lt"] > rebuild["weights"]["lt"]
+    assert contend["weights"]["playoff_odds"] > rebuild["weights"]["playoff_odds"]
+    # Weights are a distribution over the remaining weeks, so the split is whole.
+    for grade in (rebuild, contend):
+        assert round(grade["weights"]["st"] + grade["weights"]["lt"], 6) == 1.0
+        # Reported to 2dp, so the split adds back within rounding.
+        assert abs(grade["delta_st"] + grade["delta_lt"] - grade["blended"]) <= 0.011
 
 
 def test_one_for_two_full_roster_subtracts_forced_drop():
@@ -352,7 +363,11 @@ def test_one_for_two_open_slot_does_not_drop():
         value_player(players[12], ctx, baselines, window="bubble"),
         value_player(players[13], ctx, baselines, window="bubble"),
     ]
-    assert result["roster"]["delta_st"] == round(recv[0].st_vorp + recv[1].st_vorp - send.st_vorp, 2)
+    # Expected is summed from fields already rounded to 2dp; the grade sums the
+    # unrounded values, so compare within that.
+    assert result["roster"]["delta_st"] == pytest.approx(
+        recv[0].st_vorp + recv[1].st_vorp - send.st_vorp, abs=0.011
+    )
     assert result["roster"]["cap"] == 16
 
 
@@ -384,3 +399,121 @@ def test_two_for_one_empty_slot_is_replacement_level():
     # Empty leftover spot is ~0 VORP, so after-before == recv - send.
     assert result["roster"]["delta_st"] == round(recv.st_vorp - send_a.st_vorp - send_b.st_vorp, 2)
     assert result["roster"]["delta_lt"] == round(recv.lt_vorp - send_a.lt_vorp - send_b.lt_vorp, 2)
+
+
+def test_lineup_is_reoptimized_each_week():
+    from league_manager.leverage import week_weights
+    from league_manager.trades import lineup_curves, weekly_lineup_points
+
+    ctx = LeagueContext(
+        current_week=10, season_end_week=17, regular_season_end=14,
+        playoff_team_count=6, team_count=10, wins=5, losses=4,
+    )
+    weeks = ctx.remaining_weeks
+    # A star available only for the first two weeks, and a steady alternative.
+    roster = [
+        {
+            "id": 1, "name": "Two Week Star", "position": "WR", "lineup_slot": "WR",
+            "lineup_slot_id": 4,
+            "weekly_projections": {week: 30.0 for week in weeks[:2]},
+        },
+        {
+            "id": 2, "name": "Steady", "position": "WR", "lineup_slot": "BE",
+            "lineup_slot_id": 20,
+            "weekly_projections": {week: 10.0 for week in weeks},
+        },
+    ]
+    weights = week_weights(ctx)
+    curves = lineup_curves(roster, ctx)
+    st, lt, picks = weekly_lineup_points(
+        roster, context=ctx, weights=weights, curves=curves, slot_template=[4]
+    )
+
+    # The star starts while he is available, and is replaced once he is not --
+    # a single lineup held across the whole horizon cannot do both.
+    assert [p["id"] for p in picks[weeks[0]]] == [1]
+    assert [p["id"] for p in picks[weeks[1]]] == [1]
+    assert [p["id"] for p in picks[weeks[2]]] == [2]
+    assert all(picks[week][0]["id"] == 2 for week in weeks[2:])
+
+    # Never worse than benching the star outright.
+    steady_only = sum(weights.weight(week) * 10.0 for week in weeks)
+    assert st + lt > steady_only
+
+
+def test_exact_drop_chooser_never_loses_to_the_margin_proxy():
+    # choose_drops_exactly scores each candidate roster the way the trade itself
+    # is scored, so by construction it cannot do worse than the fast proxy.
+    from league_manager.leverage import week_weights
+    from league_manager.roster_roles import (
+        RoleScorer,
+        assign_roles,
+        choose_forced_drops,
+        role_weight_set,
+        roster_totals,
+    )
+    from league_manager.trades import (
+        choose_drops_exactly,
+        lineup_curves,
+        weekly_lineup_points,
+    )
+    from league_manager.value import weekly_projection_curve
+
+    ctx = LeagueContext(
+        current_week=6, season_end_week=17, regular_season_end=14,
+        playoff_team_count=6, team_count=10, wins=2, losses=3,
+    )
+    weeks = ctx.remaining_weeks
+    baselines = {"RB": 8.0, "WR": 8.0, "K": 8.0}
+
+    def row(pid, name, pos, curve, slot_id=20, slot="BE"):
+        return {
+            "id": pid, "name": name, "position": pos,
+            "lineup_slot": slot, "lineup_slot_id": slot_id,
+            "weekly_projections": curve,
+        }
+
+    roster = [
+        row(1, "Starter RB", "RB", {w: 18.0 for w in weeks}, 2, "RB"),
+        row(2, "Starter WR", "WR", {w: 17.0 for w in weeks}, 4, "WR"),
+        row(3, "Only K", "K", {w: 8.3 for w in weeks}, 17, "K"),
+        # Covers the WR slot in the weeks the starter is out.
+        row(4, "Bye Cover WR", "WR", {w: 13.0 for w in weeks[:2]}),
+        row(5, "Flat Spare", "WR", {w: 8.6 for w in weeks}),
+        row(9, "Arrival", "RB", {w: 19.0 for w in weeks}),
+    ]
+    cache: dict = {}
+
+    def curve_for(player):
+        pid = player.get("id")
+        if pid not in cache:
+            cache[pid], _ = weekly_projection_curve(player, ctx)
+        return cache[pid]
+
+    weights = week_weights(ctx)
+    scorer = RoleScorer(ctx, baselines, role_weight_set(weights, ctx), curve_for=curve_for)
+    roles = assign_roles(roster, scorer=scorer)
+    slots = [2, 4, 17]
+    incoming = [roster[-1]]
+    shared = dict(
+        context=ctx, weights=weights, slots=slots, roster_w=0.6, lineup_w=0.4
+    )
+
+    def total_after(cut_id):
+        after = [p for p in roster if p.get("id") != cut_id]
+        rs, rl = roster_totals(after, scorer)
+        ls, ll, _ = weekly_lineup_points(
+            after, context=ctx, weights=weights,
+            curves=lineup_curves(after, ctx, cache={}), slot_template=slots,
+        )
+        return 0.6 * (rs + rl) + 0.4 * (ls + ll)
+
+    proxy = choose_forced_drops(
+        roster, incoming=incoming, drops_needed=1, scorer=scorer, roles=roles
+    )
+    exact = choose_drops_exactly(
+        roster, incoming=incoming, drops_needed=1, scorer=scorer, curve_cache={}, **shared
+    )
+    assert len(exact) == 1
+    assert exact[0]["id"] != 3  # the only kicker stays
+    assert total_after(exact[0]["id"]) >= total_after(proxy[0]["id"]) - 1e-9
