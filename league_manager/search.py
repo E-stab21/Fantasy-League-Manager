@@ -192,6 +192,9 @@ def search_trades(
         max_their_lt = band.max_their_lt
     resolved = infer_window(context, window)
     weights = weights or week_weights(context)
+    # Per-week curves depend only on the player, not the package, so build them
+    # once for the whole enumeration instead of per candidate trade.
+    curve_cache: dict[Any, dict[int, float | None]] = {}
     valued = {
         player_id: value_player(player, context, baselines, window=resolved, weights=weights)
         for player_id, player in players.items()
@@ -220,6 +223,7 @@ def search_trades(
             our_roster=our_team.get("roster") or [],
             baselines=baselines,
             weights=weights,
+            curve_cache=curve_cache,
         )
         their_face_net = sum(faces[player["id"]] for player in send) - sum(
             faces[player["id"]] for player in recv

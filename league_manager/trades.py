@@ -4,11 +4,15 @@ Roster surplus = after-trade VORP minus before-trade VORP (asset pile).
 On a full roster, extra incoming players force a drop of the lowest remaining
 VORP (not the players just received); that cut is priced like part of the trade.
 Empty spots after a net-loss deal are replacement-level (~0 VORP).
-Lineup surplus = change in optimal starting-lineup points (what you start).
+Lineup surplus = change in starting-lineup points (what you actually start),
+re-optimized every week, because lineups are reset weekly. Each remaining week
+is filled on its own projections and the weeks are then weighted, so a player
+available for only part of the stretch counts in the weeks he plays and is
+replaced in the rest.
 
-Both are computed for ST and LT, then mixed with horizon weights (contender /
-bubble / rebuilder) and structure weights (roster vs lineup). Stud tax and
-lineup-hole hacks are replaced by lineup surplus.
+Both are split into the short-term window and everything after, then mixed with
+structure weights (roster vs lineup). Stud tax and lineup-hole hacks are
+replaced by lineup surplus.
 
 When the full roster is unknown (public accept calibration), lineup surplus
 uses a position's typical starter floor instead of an optimal lineup delta.
@@ -24,6 +28,7 @@ from league_manager.slots import (
     is_starter_slot,
     normalize_position,
     player_fits_slot,
+    slot_eligibility_size,
     slot_name,
 )
 from league_manager.leverage import WeekWeights, week_weights
@@ -33,6 +38,7 @@ from league_manager.value import (
     infer_window,
     structure_weights,
     value_player,
+    weekly_projection_curve,
 )
 
 # Typical ESPN 10-team starter set when roster slots are missing.
@@ -167,58 +173,109 @@ def fit_roster_to_cap(
     return after, dropped
 
 
-def _horizon_points(value: PlayerValue, horizon: str) -> float:
-    return float(value.st_points if horizon == "st" else value.lt_points)
-
-
-def optimal_lineup_points(
+def lineup_curves(
     roster: list[dict[str, Any]],
-    *,
     context: LeagueContext,
-    baselines: dict[str, float],
-    window: str,
-    horizon: str,
-    slot_template: list[int] | None = None,
+    *,
+    cache: dict[Any, dict[int, float | None]] | None = None,
+) -> dict[Any, dict[int, float | None]]:
+    """Per-week projections for everyone who could start, keyed by player id.
+
+    Built once and reused across lineups: a trade only changes who is on the
+    roster, never what a given player is projected for in a given week.
+    """
+    curves: dict[Any, dict[int, float | None]] = {}
+    for player in roster:
+        pid = player.get("id")
+        if pid is None or _slot_id(player) == IR_SLOT:
+            continue
+        if cache is not None and pid in cache:
+            curves[pid] = cache[pid]
+            continue
+        curve, _ = weekly_projection_curve(player, context)
+        if cache is not None:
+            cache[pid] = curve
+        curves[pid] = curve
+    return curves
+
+
+def fill_lineup(
+    roster: list[dict[str, Any]],
+    slots: list[int],
+    curves: dict[Any, dict[int, float | None]],
+    week: int,
 ) -> tuple[float, list[dict[str, Any]]]:
-    """Greedy fill of starter slots maximizing ST or LT points."""
-    slots = slot_template or starter_slot_template(roster)
-    valued = {
-        player.get("id"): value_player(player, context, baselines, window=window)
-        for player in roster
-        if player.get("id") is not None and _slot_id(player) != IR_SLOT
-    }
-    available = [player for player in roster if player.get("id") in valued]
+    """Best lineup for one week. Slots must already be restrictive-first."""
     assigned: set[Any] = set()
     picks: list[dict[str, Any]] = []
     total = 0.0
     for slot in slots:
-        candidates = [
-            player
-            for player in available
-            if player.get("id") not in assigned
-            and player_fits_slot(str(player.get("position") or ""), slot)
-        ]
-        candidates.sort(
-            key=lambda player: _horizon_points(valued[player["id"]], horizon),
-            reverse=True,
-        )
-        if not candidates:
+        best: dict[str, Any] | None = None
+        best_points = 0.0
+        for player in roster:
+            pid = player.get("id")
+            if pid is None or pid in assigned or pid not in curves:
+                continue
+            points = curves[pid].get(week)
+            # None means the player is not playing that week, so they are not a
+            # candidate and whoever is next fills the slot instead.
+            if points is None:
+                continue
+            if not player_fits_slot(str(player.get("position") or ""), slot):
+                continue
+            if best is None or points > best_points:
+                best, best_points = player, points
+        if best is None:
             continue
-        pick = candidates[0]
-        pid = pick.get("id")
-        assigned.add(pid)
-        pts = _horizon_points(valued[pid], horizon)
-        total += pts
+        assigned.add(best.get("id"))
+        total += best_points
         picks.append(
             {
-                "id": pid,
-                "name": pick.get("name"),
-                "position": pick.get("position"),
+                "id": best.get("id"),
+                "name": best.get("name"),
+                "position": best.get("position"),
                 "slot": slot_name(slot),
-                "points": round(pts, 2),
+                "points": round(best_points, 2),
             }
         )
-    return round(total, 2), picks
+    return total, picks
+
+
+def weekly_lineup_points(
+    roster: list[dict[str, Any]],
+    *,
+    context: LeagueContext,
+    weights: WeekWeights,
+    curves: dict[Any, dict[int, float | None]],
+    slot_template: list[int] | None = None,
+) -> tuple[float, float, dict[int, list[dict[str, Any]]]]:
+    """Weighted starting-lineup points, re-optimized every week.
+
+    Lineups are reset weekly, so each week is filled on its own projections and
+    the weeks are then weighted. A player available for only part of the stretch
+    counts in the weeks he plays and is simply replaced in the rest, which one
+    lineup held fixed across the whole horizon cannot express.
+
+    Returns (short_term, long_term, picks per week).
+    """
+    slots = sorted(
+        slot_template if slot_template is not None else starter_slot_template(roster),
+        key=slot_eligibility_size,
+    )
+    short_weeks = set(context.short_term_week_list)
+    short_total = long_total = 0.0
+    picks_by_week: dict[int, list[dict[str, Any]]] = {}
+    for week in context.remaining_weeks:
+        weight = weights.weight(week)
+        if weight <= 0:
+            continue
+        total, picks = fill_lineup(roster, slots, curves, week)
+        picks_by_week[week] = picks
+        if week in short_weeks:
+            short_total += weight * total
+        else:
+            long_total += weight * total
+    return short_total, long_total, picks_by_week
 
 
 def starter_floor_baselines(
@@ -311,6 +368,7 @@ def grade_valued_trade(
     baselines: dict[str, float] | None = None,
     starter_floors: dict[str, float] | None = None,
     weights: WeekWeights | None = None,
+    curve_cache: dict[Any, dict[int, float | None]] | None = None,
 ) -> dict[str, Any]:
     weights = weights or week_weights(context)
     short_weeks = set(context.short_term_week_list)
@@ -380,18 +438,17 @@ def grade_valued_trade(
                 "so the extra incoming player(s) fit. Their VORP is in roster surplus "
                 "(after minus before), as if they were on the send side."
             )
-        before_st, lineup_before_st = optimal_lineup_points(
-            before, context=context, baselines=baselines, window=window, horizon="st", slot_template=slots
+        curves = lineup_curves(before, context, cache=curve_cache)
+        curves.update(lineup_curves(after, context, cache=curve_cache))
+        before_st, before_lt, before_picks = weekly_lineup_points(
+            before, context=context, weights=weights, curves=curves, slot_template=slots
         )
-        after_st, lineup_after_st = optimal_lineup_points(
-            after, context=context, baselines=baselines, window=window, horizon="st", slot_template=slots
+        after_st, after_lt, after_picks = weekly_lineup_points(
+            after, context=context, weights=weights, curves=curves, slot_template=slots
         )
-        before_lt, _ = optimal_lineup_points(
-            before, context=context, baselines=baselines, window=window, horizon="lt", slot_template=slots
-        )
-        after_lt, _ = optimal_lineup_points(
-            after, context=context, baselines=baselines, window=window, horizon="lt", slot_template=slots
-        )
+        current = int(context.current_week)
+        lineup_before_st = before_picks.get(current, [])
+        lineup_after_st = after_picks.get(current, [])
         lineup_delta_st = after_st - before_st
         lineup_delta_lt = after_lt - before_lt
         notes.append(
@@ -492,6 +549,7 @@ def grade_trade(
     our_roster: list[dict[str, Any]] | None = None,
     starter_floors: dict[str, float] | None = None,
     weights: WeekWeights | None = None,
+    curve_cache: dict[Any, dict[int, float | None]] | None = None,
 ) -> dict[str, Any]:
     if not send_ids or not receive_ids:
         raise ValueError("Trade grade needs at least one send id and one receive id")
@@ -525,6 +583,7 @@ def grade_trade(
         baselines=baselines,
         starter_floors=starter_floors,
         weights=weights,
+        curve_cache=curve_cache,
     )
 
 

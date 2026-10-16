@@ -258,7 +258,8 @@ def test_losing_record_weights_the_games_in_front_of_you():
     # Weights are a distribution over the remaining weeks, so the split is whole.
     for grade in (rebuild, contend):
         assert round(grade["weights"]["st"] + grade["weights"]["lt"], 6) == 1.0
-        assert round(grade["delta_st"] + grade["delta_lt"], 6) == round(grade["blended"], 6)
+        # Reported to 2dp, so the split adds back within rounding.
+        assert abs(grade["delta_st"] + grade["delta_lt"] - grade["blended"]) <= 0.011
 
 
 def test_one_for_two_full_roster_subtracts_forced_drop():
@@ -392,3 +393,43 @@ def test_two_for_one_empty_slot_is_replacement_level():
     # Empty leftover spot is ~0 VORP, so after-before == recv - send.
     assert result["roster"]["delta_st"] == round(recv.st_vorp - send_a.st_vorp - send_b.st_vorp, 2)
     assert result["roster"]["delta_lt"] == round(recv.lt_vorp - send_a.lt_vorp - send_b.lt_vorp, 2)
+
+
+def test_lineup_is_reoptimized_each_week():
+    from league_manager.leverage import week_weights
+    from league_manager.trades import lineup_curves, weekly_lineup_points
+
+    ctx = LeagueContext(
+        current_week=10, season_end_week=17, regular_season_end=14,
+        playoff_team_count=6, team_count=10, wins=5, losses=4,
+    )
+    weeks = ctx.remaining_weeks
+    # A star available only for the first two weeks, and a steady alternative.
+    roster = [
+        {
+            "id": 1, "name": "Two Week Star", "position": "WR", "lineup_slot": "WR",
+            "lineup_slot_id": 4,
+            "weekly_projections": {week: 30.0 for week in weeks[:2]},
+        },
+        {
+            "id": 2, "name": "Steady", "position": "WR", "lineup_slot": "BE",
+            "lineup_slot_id": 20,
+            "weekly_projections": {week: 10.0 for week in weeks},
+        },
+    ]
+    weights = week_weights(ctx)
+    curves = lineup_curves(roster, ctx)
+    st, lt, picks = weekly_lineup_points(
+        roster, context=ctx, weights=weights, curves=curves, slot_template=[4]
+    )
+
+    # The star starts while he is available, and is replaced once he is not --
+    # a single lineup held across the whole horizon cannot do both.
+    assert [p["id"] for p in picks[weeks[0]]] == [1]
+    assert [p["id"] for p in picks[weeks[1]]] == [1]
+    assert [p["id"] for p in picks[weeks[2]]] == [2]
+    assert all(picks[week][0]["id"] == 2 for week in weeks[2:])
+
+    # Never worse than benching the star outright.
+    steady_only = sum(weights.weight(week) * 10.0 for week in weeks)
+    assert st + lt > steady_only

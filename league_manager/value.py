@@ -279,7 +279,17 @@ def weekly_projection_curve(
         # Sleeper publishes the whole remaining season and leaves out the weeks
         # it expects a player to miss, so an absence here is information.
         published = _weeks_from(sleeper_curve)
-        curve = {week: published.get(week) for week in weeks}
+        # Average in ESPN wherever both have a number for the same week. ESPN
+        # only carries the current week, so in practice this is the documented
+        # this-week blend. A week Sleeper leaves out stays left out: its absence
+        # is the signal, and blending would put a sidelined player back.
+        espn_weeks = _weeks_from(player.get("weekly_stats"))
+        curve = {}
+        for week in weeks:
+            points = published.get(week)
+            if points is not None and week in espn_weeks:
+                points = (points + espn_weeks[week]) / 2
+            curve[week] = points
         covered = sum(1 for week in weeks if curve[week] is not None)
         if covered == len(weeks):
             source = "weekly"

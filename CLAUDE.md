@@ -67,6 +67,29 @@ Band and grade thresholds in `trade_market.py` and `trades.letter_grade` are
 calibrated to this scale. **If you change the weighting, re-measure the blended
 distribution before touching those cutoffs.**
 
+## Starting lineup
+
+Lineups are reset weekly, so the lineup is **re-optimized for every remaining
+week** and the weeks are then weighted (`trades.weekly_lineup_points`). A player
+available for only part of the stretch counts in the weeks he plays and is
+replaced in the rest, which one lineup held fixed across a horizon cannot
+express. `trades.lineup_curves` builds the per-week projections once and a
+`curve_cache` is threaded through `search_trades` and `rank_waiver_claims`, so
+the weekly loop costs nothing next to re-valuing players per candidate trade.
+
+**Slots must be filled most restrictive first** (`slots.slot_eligibility_size`).
+The slot template comes from whatever order ESPN lists the roster in, and a FLEX
+can land before a WR slot — filling in that raw order lets FLEX take the best WR
+and strands points. Eligibility is nested (anyone who fits a `WR` slot also fits
+FLEX), so restrictive-first is optimal here; it matched brute force on a live
+roster where raw order lost up to 2.0 points.
+
+`advise.optimal_lineup` (start/sit) takes availability from **this week's
+per-week projection, not the `injured` flag** — the flag goes stale and flagged
+players are routinely still projected to play. Both sides of the reported delta
+must be scored the same way, or `current_projected` and `recommended_projected`
+are not comparable.
+
 Known gap: Sleeper keys defenses by team abbreviation, not the numeric id the
 matcher uses, so D/ST gets no per-week curve and falls back to a flat rate.
 

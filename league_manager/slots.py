@@ -85,3 +85,20 @@ def normalize_position(position: str) -> str:
 
 def is_starter_slot(slot_id: int | None) -> bool:
     return slot_id is not None and int(slot_id) in STARTER_SLOTS
+
+
+def slot_eligibility_size(slot_id: int | None) -> int:
+    """How many positions a slot accepts. Bench / IR / unknown accept anything.
+
+    Fill order matters for a greedy lineup: slots must be filled most
+    restrictive first. Eligibility here is nested (anyone who fits a WR slot
+    also fits FLEX), so filling the exclusive slots before the flexible ones is
+    optimal -- there is never a reason to hold a player back from a slot only
+    they can fill.
+    """
+    if slot_id is None:
+        return len(ELIGIBLE_FOR_SLOT) + 1
+    allowed = ELIGIBLE_FOR_SLOT.get(int(slot_id), None)
+    if allowed is None:
+        return len(ELIGIBLE_FOR_SLOT) + 1
+    return len(allowed)

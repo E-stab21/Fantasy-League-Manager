@@ -10,6 +10,18 @@ from league_manager.slots import parse_slot
 from league_manager.value import LeagueContext
 
 
+def _lineup_ctx() -> LeagueContext:
+    return LeagueContext(
+        current_week=10,
+        season_end_week=17,
+        regular_season_end=14,
+        playoff_team_count=6,
+        team_count=10,
+        wins=5,
+        losses=4,
+    )
+
+
 def test_optimal_lineup_benches_injured_and_promotes_better_rb():
     roster = [
         {
@@ -40,7 +52,7 @@ def test_optimal_lineup_benches_injured_and_promotes_better_rb():
             "injured": False,
         },
     ]
-    advice = optimal_lineup(roster)
+    advice = optimal_lineup(roster, context=_lineup_ctx())
     recommended_ids = {player["id"] for player in advice["recommended"]}
     assert 2 in recommended_ids
     assert 1 not in recommended_ids
@@ -201,7 +213,9 @@ def test_waiver_targets_rank_upgrade():
     assert "lineup" in targets[0]
     assert targets[0]["blended"] > targets[1]["blended"]
     assert targets[0]["roster"]["delta_lt"] > 0
-    assert targets[0]["lineup"]["delta_st"] == 0
+    # Lineups are re-set weekly, so an add can enter the lineup in some weeks of
+    # the short-term window and not others. It must not make the lineup worse.
+    assert targets[0]["lineup"]["delta_st"] >= 0
     # Same helper still returns a list for older callers.
     listed = waiver_targets(
         roster, free_agents, context=context, baselines=baselines, window="auto", limit=2
@@ -340,3 +354,56 @@ def test_rank_waiver_claims_surfaces_ir_alert_and_flags_drop():
     assert target["drop_candidate_id"] == 2
     assert target["drop_ir_eligible"] is True
     assert "IR-eligible" in target["why"]
+
+
+def test_flex_cannot_outbid_a_slot_filled_later():
+    # Slot order comes from however ESPN lists the roster, so a FLEX can appear
+    # before a WR slot. Filling in that order lets FLEX take the best WR and
+    # strands points; restrictive slots must be filled first.
+    roster = [
+        {
+            "id": 1, "name": "FLEX seat", "position": "WR", "lineup_slot": "FLEX",
+            "lineup_slot_id": 23, "projected_points": 20,
+        },
+        {
+            "id": 2, "name": "WR seat", "position": "WR", "lineup_slot": "WR",
+            "lineup_slot_id": 4, "projected_points": 15,
+        },
+        {
+            "id": 3, "name": "Bench RB", "position": "RB", "lineup_slot": "BE",
+            "lineup_slot_id": 20, "projected_points": 18,
+        },
+    ]
+    advice = optimal_lineup(roster, context=_lineup_ctx())
+    # WR slot takes the 20, FLEX takes the 18 RB: 38, not 20 + 15.
+    assert round(advice["recommended_projected"], 2) == 38.0
+    assert {p["id"] for p in advice["recommended"]} == {1, 3}
+
+
+def test_start_sit_trusts_the_week_projection_over_a_stale_injured_flag():
+    # Players carrying an injury flag are routinely still projected to play.
+    ctx = _lineup_ctx()
+    weeks = ctx.remaining_weeks
+    roster = [
+        {
+            "id": 1, "name": "Stale Flag", "position": "WR", "lineup_slot": "BE",
+            "lineup_slot_id": 20, "injured": True,
+            "injury_status": "INJURY_RESERVE",
+            "weekly_projections": {week: 18.0 for week in weeks},
+        },
+        {
+            "id": 2, "name": "Really Out", "position": "WR", "lineup_slot": "WR",
+            "lineup_slot_id": 4, "injured": True, "injury_status": "OUT",
+            # The source leaves this week out entirely.
+            "weekly_projections": {week: 18.0 for week in weeks[1:]},
+        },
+        {
+            "id": 3, "name": "Plodder", "position": "WR", "lineup_slot": "BE",
+            "lineup_slot_id": 20,
+            "weekly_projections": {week: 8.0 for week in weeks},
+        },
+    ]
+    advice = optimal_lineup(roster, context=ctx)
+    started = {p["id"] for p in advice["recommended"]}
+    assert 1 in started  # flagged but projected: starts
+    assert 2 not in started  # genuinely out this week

@@ -35,6 +35,8 @@ python3 -m league_manager values
 
 Sleeper is on by default for start/sit (averaged with ESPN) and for trade/waiver ROS. Use `--no-sleeper` to force ESPN-only.
 
+`lineup-advice` fills the most restrictive slots first, so a FLEX never takes a player a WR/RB slot needed. Availability comes from this week's projection rather than the `injured` flag, which goes stale — a flagged player the sources still project will start, and one they leave out of this week will not.
+
 ## Waivers (redraft)
 
 ```bash
@@ -56,7 +58,7 @@ python3 -m league_manager trade-grade --send 111,222 --receive 333
 
 Values are **points per weighted game above replacement**, so a trade blend of `+10` is large and `+1` is marginal. Each remaining week carries a weight that sums to 1, set by playoff leverage: a losing team weights the games in front of it, a contender weights weeks 15–17 (`values` returns the whole distribution under `week_weights`). `st_vorp` and `lt_vorp` split that single sum and add back to `blended`.
 
-`--window` can be `auto`, `contender`, `bubble`, or `rebuilder`. Auto uses record and standings. It no longer weights time — only how much asset depth counts against the starting lineup. `--horizon` sets how many weeks the ST split covers (default 3). `trade-search` walks 1:1 / 2:1 / 1:2 / 2:2 against other rosters and keeps packages inside a realism band (default blended ~1–12; `trade-calibrate --apply` can raise the top). Grades mix **roster VORP** (after minus before, including a forced drop on a full roster when you net extra players) and **lineup surplus** (optimal start/sit before vs after). Accepted public trades set the band only — they do **not** change VORP pricing. Grade before proposing; `league trade` attaches the same grade on preview.
+`--window` can be `auto`, `contender`, `bubble`, or `rebuilder`. Auto uses record and standings. It no longer weights time — only how much asset depth counts against the starting lineup. `--horizon` sets how many weeks the ST split covers (default 3). `trade-search` walks 1:1 / 2:1 / 1:2 / 2:2 against other rosters and keeps packages inside a realism band (default blended ~1–12; `trade-calibrate --apply` can raise the top). Grades mix **roster VORP** (after minus before, including a forced drop on a full roster when you net extra players) and **lineup surplus** — the starting lineup re-optimized for each remaining week and then weighted, since lineups are reset weekly, so a player available for only part of the stretch counts only in the weeks he plays. Accepted public trades set the band only — they do **not** change VORP pricing. Grade before proposing; `league trade` attaches the same grade on preview.
 
 ```bash
 python3 -m league_manager trade-calibrate
