@@ -56,7 +56,7 @@ python3 -m league_manager trade-search
 python3 -m league_manager trade-grade --send 111,222 --receive 333
 ```
 
-Two bench spots are reserved for long-term stashes (mostly injury) and two for streaming, each scored on its own week curve — `values` reports every player's `role` and `role_value`, plus `reserved_slots`. When a trade forces a drop, the arrival is the yardstick: for each role the relevant newcomer is whoever scores best on that role's curve, and whoever they beat worst in their own role is cut. The last player at a position is protected unless the trade brings that position in.
+Two bench spots are reserved for long-term stashes (mostly injury) and two for streaming, each scored on its own week curve — `values` reports every player's `role` and `role_value`, plus `reserved_slots`. When a trade forces a drop, grading one trade tries every legal cut and keeps whichever leaves the most total value; bulk `trade-search` uses a faster proxy that measures each player against the *weakest* arrival (the one actually causing the squeeze) in their own role, so a search result can name a different drop than that trade's own grade. Either way the last player at a position is protected unless the trade brings that position in, the dropped player is priced as if on the send side, and the lineup delta runs on the post-drop roster.
 
 Values are **points per weighted game above replacement**, so a trade blend of `+10` is large and `+1` is marginal. Each remaining week carries a weight that sums to 1, set by playoff leverage: a losing team weights the games in front of it, a contender weights weeks 15–17 (`values` returns the whole distribution under `week_weights`). `st_vorp` and `lt_vorp` split that single sum and add back to `blended`.
 

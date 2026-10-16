@@ -3,6 +3,7 @@ from league_manager.roster_roles import (
     RoleScorer,
     assign_roles,
     choose_forced_drops,
+    marginal_arrival,
     role_weight_set,
     roster_totals,
 )
@@ -147,19 +148,27 @@ def test_last_player_at_a_position_is_protected_unless_the_trade_covers_it():
     assert [player["id"] for player in dropped] == [1]
 
 
-def test_multi_player_arrival_uses_the_best_newcomer_on_each_curve():
+def test_the_weakest_arrival_is_the_yardstick_not_the_best_one():
+    # On a full roster the player who causes the squeeze is the last man in, so
+    # a stud arriving alongside a spare part must not make every incumbent look
+    # redundant.
     ctx = _ctx()
     weeks = ctx.remaining_weeks
     baselines = {"WR": 8.0}
-    # Holds a stash slot, and only a strong late curve should dislodge him.
     stashed = _bench(1, "Stashed", "WR", {week: 16.0 for week in weeks[3:]})
     spare = _bench(2, "Spare", "WR", {week: 9.0 for week in weeks})
-    near_only = _bench(9, "Near Only", "WR", {week: 30.0 for week in weeks[:2]})
+    near_only = _bench(9, "Two Week Spike", "WR", {week: 30.0 for week in weeks[:2]})
     late_monster = _bench(10, "Late Monster", "WR", {week: 40.0 for week in weeks[3:]})
     roster = [stashed, spare, near_only, late_monster]
     scorer = _scorer(ctx, baselines)
     roles = assign_roles(roster, scorer=scorer)
     assert roles[1] == ROLE_STASH
+
+    # Each arrival is judged on the role it would occupy, and the weaker of the
+    # two at its own best use is the marginal one.
+    marginal = marginal_arrival([near_only, late_monster], scorer=scorer, roles=roles)
+    assert marginal["id"] == 9
+
     dropped = choose_forced_drops(
         roster,
         incoming=[near_only, late_monster],
@@ -167,13 +176,26 @@ def test_multi_player_arrival_uses_the_best_newcomer_on_each_curve():
         scorer=scorer,
         roles=roles,
     )
-    # The late monster is measured against the stash slot and clears its
-    # occupant by more than any arrival clears the spare, so the stash is what
-    # the trade made redundant. Which is the rule working: the newcomer picked
-    # for each role is the one that scores best on that role's curve.
-    assert [player["id"] for player in dropped] == [1]
-    assert scorer.value(late_monster, ROLE_STASH) > scorer.value(near_only, ROLE_STASH)
-    assert scorer.value(near_only, ROLE_STREAM) > scorer.value(late_monster, ROLE_STREAM)
+    # The marginal arrival is a two-week spike, so it does not clear the stash
+    # on the stash curve at all. The spare is the one it beats.
+    assert [player["id"] for player in dropped] == [2]
+    assert scorer.value(near_only, ROLE_STASH) < scorer.value(stashed, ROLE_STASH)
+    assert scorer.value(near_only, ROLE_REGULAR) > scorer.value(spare, ROLE_REGULAR)
+
+
+def test_best_arrival_as_yardstick_would_have_cut_the_stash():
+    # Guard against regressing to the best-arrival rule: with the stud as the
+    # yardstick the stash looks the most beaten, which is the wrong answer.
+    ctx = _ctx()
+    weeks = ctx.remaining_weeks
+    scorer = _scorer(ctx, {"WR": 8.0})
+    stashed = _bench(1, "Stashed", "WR", {week: 16.0 for week in weeks[3:]})
+    spare = _bench(2, "Spare", "WR", {week: 9.0 for week in weeks})
+    late_monster = _bench(10, "Late Monster", "WR", {week: 40.0 for week in weeks[3:]})
+    roles = assign_roles([stashed, spare, late_monster], scorer=scorer)
+    stash_margin = scorer.value(late_monster, ROLE_STASH) - scorer.value(stashed, ROLE_STASH)
+    spare_margin = scorer.value(late_monster, ROLE_REGULAR) - scorer.value(spare, ROLE_REGULAR)
+    assert stash_margin > spare_margin  # why the best-arrival rule picked wrong
 
 
 def test_no_drop_when_the_roster_already_fits():

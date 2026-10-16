@@ -439,3 +439,81 @@ def test_lineup_is_reoptimized_each_week():
     # Never worse than benching the star outright.
     steady_only = sum(weights.weight(week) * 10.0 for week in weeks)
     assert st + lt > steady_only
+
+
+def test_exact_drop_chooser_never_loses_to_the_margin_proxy():
+    # choose_drops_exactly scores each candidate roster the way the trade itself
+    # is scored, so by construction it cannot do worse than the fast proxy.
+    from league_manager.leverage import week_weights
+    from league_manager.roster_roles import (
+        RoleScorer,
+        assign_roles,
+        choose_forced_drops,
+        role_weight_set,
+        roster_totals,
+    )
+    from league_manager.trades import (
+        choose_drops_exactly,
+        lineup_curves,
+        weekly_lineup_points,
+    )
+    from league_manager.value import weekly_projection_curve
+
+    ctx = LeagueContext(
+        current_week=6, season_end_week=17, regular_season_end=14,
+        playoff_team_count=6, team_count=10, wins=2, losses=3,
+    )
+    weeks = ctx.remaining_weeks
+    baselines = {"RB": 8.0, "WR": 8.0, "K": 8.0}
+
+    def row(pid, name, pos, curve, slot_id=20, slot="BE"):
+        return {
+            "id": pid, "name": name, "position": pos,
+            "lineup_slot": slot, "lineup_slot_id": slot_id,
+            "weekly_projections": curve,
+        }
+
+    roster = [
+        row(1, "Starter RB", "RB", {w: 18.0 for w in weeks}, 2, "RB"),
+        row(2, "Starter WR", "WR", {w: 17.0 for w in weeks}, 4, "WR"),
+        row(3, "Only K", "K", {w: 8.3 for w in weeks}, 17, "K"),
+        # Covers the WR slot in the weeks the starter is out.
+        row(4, "Bye Cover WR", "WR", {w: 13.0 for w in weeks[:2]}),
+        row(5, "Flat Spare", "WR", {w: 8.6 for w in weeks}),
+        row(9, "Arrival", "RB", {w: 19.0 for w in weeks}),
+    ]
+    cache: dict = {}
+
+    def curve_for(player):
+        pid = player.get("id")
+        if pid not in cache:
+            cache[pid], _ = weekly_projection_curve(player, ctx)
+        return cache[pid]
+
+    weights = week_weights(ctx)
+    scorer = RoleScorer(ctx, baselines, role_weight_set(weights, ctx), curve_for=curve_for)
+    roles = assign_roles(roster, scorer=scorer)
+    slots = [2, 4, 17]
+    incoming = [roster[-1]]
+    shared = dict(
+        context=ctx, weights=weights, slots=slots, roster_w=0.6, lineup_w=0.4
+    )
+
+    def total_after(cut_id):
+        after = [p for p in roster if p.get("id") != cut_id]
+        rs, rl = roster_totals(after, scorer)
+        ls, ll, _ = weekly_lineup_points(
+            after, context=ctx, weights=weights,
+            curves=lineup_curves(after, ctx, cache={}), slot_template=slots,
+        )
+        return 0.6 * (rs + rl) + 0.4 * (ls + ll)
+
+    proxy = choose_forced_drops(
+        roster, incoming=incoming, drops_needed=1, scorer=scorer, roles=roles
+    )
+    exact = choose_drops_exactly(
+        roster, incoming=incoming, drops_needed=1, scorer=scorer, curve_cache={}, **shared
+    )
+    assert len(exact) == 1
+    assert exact[0]["id"] != 3  # the only kicker stays
+    assert total_after(exact[0]["id"]) >= total_after(proxy[0]["id"]) - 1e-9

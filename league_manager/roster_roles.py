@@ -181,6 +181,28 @@ def _position_counts(roster: list[dict[str, Any]]) -> dict[str, int]:
     return counts
 
 
+def marginal_arrival(
+    incoming: list[dict[str, Any]],
+    *,
+    scorer: RoleScorer,
+    roles: dict[Any, str],
+) -> dict[str, Any] | None:
+    """The arrival that causes the squeeze: the weakest, at its own best use.
+
+    Each arrival is judged on the role it would actually occupy, so a package of
+    a stud and a streamer compares the streamer on the streaming curve rather
+    than penalising it for a season it was never going to be here for.
+    """
+    if not incoming:
+        return None
+    return min(
+        incoming,
+        key=lambda player: scorer.value(
+            player, roles.get(player.get("id"), ROLE_REGULAR)
+        ),
+    )
+
+
 def choose_forced_drops(
     roster: list[dict[str, Any]],
     *,
@@ -189,13 +211,19 @@ def choose_forced_drops(
     scorer: RoleScorer,
     roles: dict[Any, str],
 ) -> list[dict[str, Any]]:
-    """Cut whoever the arriving players beat worst in that player's own role.
+    """Cut whoever the *marginal* arrival beats worst in that player's own role.
 
-    A drop only happens because someone is arriving, so the arrival is the
-    yardstick: for each role, the relevant newcomer is whoever scores best on
-    that role's curve, and each rostered player is measured by how far that
-    newcomer clears them in the role they themselves occupy. The player beaten
-    worst is the most redundant, so they go.
+    A drop only happens because someone is arriving, and on a full roster the
+    player who actually causes the squeeze is the weakest of the arrivals, not
+    the best one. The stud displaces someone good; it is the last man in who
+    pushes the final body off the roster. So the yardstick is the weakest
+    arrival, judged at its own best use, and each rostered player is measured by
+    how far that arrival clears them in the role they themselves occupy. Beaten
+    worst means most redundant, so they go.
+
+    Using the best arrival instead makes every incumbent look badly beaten and
+    collapses the rule into "cut the lowest-value player", which is the thing
+    the role curves exist to avoid.
 
     The last player at a position is protected, because cutting them leaves a
     starting slot that nothing can fill -- a kicker grades near replacement as
@@ -206,9 +234,11 @@ def choose_forced_drops(
     if drops_needed <= 0:
         return []
     incoming_ids = {player.get("id") for player in incoming}
-    best_incoming = {
-        role: max((scorer.value(player, role) for player in incoming), default=0.0)
-        for role in set(roles.values()) | {ROLE_REGULAR, ROLE_STASH, ROLE_STREAM}
+    all_roles = set(roles.values()) | {ROLE_REGULAR, ROLE_STASH, ROLE_STREAM}
+    marginal = marginal_arrival(incoming, scorer=scorer, roles=roles)
+    yardstick = {
+        role: (scorer.value(marginal, role) if marginal is not None else 0.0)
+        for role in all_roles
     }
 
     remaining = list(roster)
@@ -221,7 +251,7 @@ def choose_forced_drops(
             if pid is None or pid in incoming_ids or _slot_id(player) == IR_SLOT:
                 continue
             role = roles.get(pid, ROLE_REGULAR)
-            margin = best_incoming.get(role, 0.0) - scorer.value(player, role)
+            margin = yardstick.get(role, 0.0) - scorer.value(player, role)
             pos = normalize_position(str(player.get("position") or ""))
             last_at_position = counts.get(pos, 0) <= 1
             scored.append((margin, last_at_position, player))

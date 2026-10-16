@@ -133,11 +133,35 @@ role with no good occupant just holds ordinary depth.
 
 ### Choosing the forced drop
 
-A drop only happens because someone is arriving, so the arrival is the yardstick
-(`roster_roles.choose_forced_drops`). For each role, the relevant newcomer is
-whoever scores best on that role's curve; each rostered player is then measured
-by how far that newcomer clears them **in the role they themselves occupy**, and
+A drop only happens because someone is arriving, so the arrival is the yardstick.
+Two implementations, picked by cost:
+
+**`grade_trade` (single trade, `exact_drop=True` by default)** uses
+`trades.choose_drops_exactly`: try every legal cut and keep whichever leaves the
+most total value, scored the same way the trade itself is — roster VORP plus the
+weekly-reoptimized lineup. Every preview path (`trade-grade`, `add`, `claim`,
+`trade`) goes through here.
+
+**`search_trades` / `rank_waiver_claims`** use the fast proxy
+`roster_roles.choose_forced_drops`. Measured: 0.08ms a trade against 12.15ms for
+the exact version, which would add ~11 minutes to a 54,756-trade search. They
+agree on 87% of real packages, so bulk ranking uses the proxy and the decision
+you act on uses the exact one. **That divergence is deliberate** — a trade can
+show a different drop in search than in its own grade.
+
+The proxy's yardstick is the **marginal arrival**: the *weakest* of the arrivals,
+judged at its own best use (`roster_roles.marginal_arrival`). On a full roster
+the player causing the squeeze is the last man in, not the stud — the stud
+displaces someone good. Using the best arrival instead makes every incumbent look
+badly beaten and collapses the rule into "cut the lowest-value player", which is
+what the role curves exist to avoid. Each rostered player is then measured by how
+far that marginal arrival clears them **in the role they themselves occupy**, and
 whoever is beaten worst goes.
+
+The drop is priced as if it were on the send side: roster delta is
+`after − before` where `after` excludes the cut player, so
+`recv − send − dropped` reconciles exactly. The lineup delta also runs on the
+**post-drop** roster, never the over-cap one.
 
 **The last player at a position is protected.** Positions are counted *after*
 the trade, so a newcomer at that position covers it and un-protects the incumbent
