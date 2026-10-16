@@ -1,3 +1,5 @@
+import pytest
+
 from league_manager.trades import grade_trade, grade_valued_trade, letter_grade
 from league_manager.value import LeagueContext, PlayerValue, value_player
 
@@ -361,7 +363,11 @@ def test_one_for_two_open_slot_does_not_drop():
         value_player(players[12], ctx, baselines, window="bubble"),
         value_player(players[13], ctx, baselines, window="bubble"),
     ]
-    assert result["roster"]["delta_st"] == round(recv[0].st_vorp + recv[1].st_vorp - send.st_vorp, 2)
+    # Expected is summed from fields already rounded to 2dp; the grade sums the
+    # unrounded values, so compare within that.
+    assert result["roster"]["delta_st"] == pytest.approx(
+        recv[0].st_vorp + recv[1].st_vorp - send.st_vorp, abs=0.011
+    )
     assert result["roster"]["cap"] == 16
 
 

@@ -103,6 +103,49 @@ are not comparable.
 Known gap: Sleeper keys defenses by team abbreviation, not the numeric id the
 matcher uses, so D/ST gets no per-week curve and falls back to a flat rate.
 
+## Reserved bench slots and forced drops
+
+Two bench spots are kept for long-term stashes (mostly injury) and two for
+streaming (`LeagueContext.stash_slots` / `stream_slots`, default 2/2). Each role
+has its own week curve (`leverage.role_weights`):
+
+- `regular` — base leverage weights
+- `stream` — the next `STREAM_WEEKS` (2) only, so a one-week spike scores as a
+  spike instead of being averaged across a season the player will not be here for
+- `stash` — the short-term window dropped, so a player who is not helping yet is
+  credited for the weeks he comes back
+
+A player takes a reserved slot when that slot's curve scores them *above* the
+regular curve, which is a statement about the **shape** of their curve: a
+back-loaded player gains under `stash`, a front-loaded one under `stream`. A flat
+curve scores identically under any normalized weighting, so it never qualifies
+(hence `MIN_ROLE_GAIN` — without it, floating-point noise hands out slots).
+
+**A role curve is a yardstick for a head-to-head, not a discount on what a
+player is worth to own.** `roster_totals` deliberately scores everyone on the
+regular curve. Role-weighting a roster total destroys real value: a season-long
+asset that happens to be front-loaded gets parked in a streaming slot and has its
+rest-of-season worth zeroed, because the stream curve only looks two weeks ahead.
+A genuine streamer already scores low later; their own curve does that work.
+
+The reservation is a lens, not a holdback — same number of active spots, and a
+role with no good occupant just holds ordinary depth.
+
+### Choosing the forced drop
+
+A drop only happens because someone is arriving, so the arrival is the yardstick
+(`roster_roles.choose_forced_drops`). For each role, the relevant newcomer is
+whoever scores best on that role's curve; each rostered player is then measured
+by how far that newcomer clears them **in the role they themselves occupy**, and
+whoever is beaten worst goes.
+
+**The last player at a position is protected.** Positions are counted *after*
+the trade, so a newcomer at that position covers it and un-protects the incumbent
+automatically. Without this the old VORP-ranked version cut your only kicker on a
+1:2 — a kicker grades near replacement as an asset while being worth a whole
+lineup slot every week, which cost 7.5 points of lineup value against cutting a
+spare RB. Do not reintroduce a drop rule that ranks by asset VORP alone.
+
 ## IR Management
 
 Before recommending or executing any drop, check whether the bench player is IR-eligible (OUT / INJURY_RESERVE status, not already on IR). `waiver-advice` surfaces this two ways:

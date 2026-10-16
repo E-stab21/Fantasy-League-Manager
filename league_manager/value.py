@@ -84,6 +84,11 @@ class LeagueContext:
     standing: int | None = None
     # Active (non-IR) roster spots. None → graders treat current occupancy as full.
     roster_cap: int | None = None
+    # Bench spots reserved for a purpose and valued on that purpose's week
+    # curve: long-term stashes (mostly injury) and short streaming slots.
+    # A lens, not a holdback -- see roster_roles.
+    stash_slots: int = 2
+    stream_slots: int = 2
 
     @property
     def remaining_weeks(self) -> list[int]:
@@ -331,6 +336,29 @@ def weekly_projection_curve(
     if bye_week is not None:
         curve[bye_week] = None
     return curve, source
+
+
+def weighted_vorp(
+    curve: dict[int, float | None],
+    replacement: float,
+    weights: WeekWeights,
+    short_weeks: set[int],
+) -> tuple[float, float]:
+    """(short-term, rest) weighted VORP from an already-built per-week curve.
+
+    The curve does not depend on the weights, so scoring one player under
+    several role curves reuses it instead of rebuilding it each time.
+    """
+    short_total = long_total = 0.0
+    for week, points in curve.items():
+        if points is None:
+            continue
+        contribution = weights.weight(week) * (points - replacement)
+        if week in short_weeks:
+            short_total += contribution
+        else:
+            long_total += contribution
+    return short_total, long_total
 
 
 def weekly_vorp_curve(

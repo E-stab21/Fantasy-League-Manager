@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from league_manager.config import Settings
-from league_manager.leverage import week_weights
+from league_manager.leverage import ROLE_REGULAR, week_weights
+from league_manager.roster_roles import RoleScorer, assign_roles, role_weight_set
 from league_manager.market import DEFAULT_LOOKBACK, find_opportunities
 from league_manager.projections import league_scoring
 from league_manager.search import parse_kinds, search_trades
@@ -18,6 +19,7 @@ from league_manager.value import (
     infer_window,
     replacement_baselines,
     value_players,
+    weekly_projection_curve,
 )
 from league_manager.writes import WriteResult, post_transaction
 
@@ -286,6 +288,33 @@ class EspnClient:
         valued = value_players(
             players, context, baselines, window=resolved_window, weights=weights
         )
+        curve_cache: dict[Any, dict[int, float | None]] = {}
+
+        def curve_for(player: dict[str, Any]) -> dict[int, float | None]:
+            pid = player.get("id")
+            if pid not in curve_cache:
+                curve_cache[pid], _ = weekly_projection_curve(player, context)
+            return curve_cache[pid]
+
+        scorer = RoleScorer(
+            context, baselines, role_weight_set(weights, context), curve_for=curve_for
+        )
+        roles = assign_roles(
+            players,
+            scorer=scorer,
+            stash_slots=context.stash_slots,
+            stream_slots=context.stream_slots,
+        )
+        by_id = {player.get("id"): player for player in players}
+        rows = []
+        for item in valued:
+            row = item.to_dict()
+            role = roles.get(item.id, ROLE_REGULAR)
+            row["role"] = role
+            source = by_id.get(item.id)
+            if source is not None:
+                row["role_value"] = round(scorer.value(source, role), 2)
+            rows.append(row)
         return {
             "team": {"id": roster.get("id"), "name": roster.get("name")},
             "window": resolved_window,
@@ -300,7 +329,11 @@ class EspnClient:
                 "record": [context.wins, context.losses, context.ties],
             },
             "replacement_weekly": baselines,
-            "players": [item.to_dict() for item in valued],
+            "reserved_slots": {
+                "stash": context.stash_slots,
+                "stream": context.stream_slots,
+            },
+            "players": rows,
         }
 
     def lineup_advice(

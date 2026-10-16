@@ -140,6 +140,63 @@ class WeekWeights:
         }
 
 
+ROLE_REGULAR = "regular"
+ROLE_STREAM = "stream"
+ROLE_STASH = "stash"
+ROLES = (ROLE_REGULAR, ROLE_STREAM, ROLE_STASH)
+
+# How many weeks ahead a streaming slot is held for.
+STREAM_WEEKS = 2
+
+
+def role_weights(
+    base: "WeekWeights",
+    context: Any,
+    role: str,
+    *,
+    stream_weeks: int = STREAM_WEEKS,
+) -> "WeekWeights":
+    """Reweight the remaining weeks for what a roster slot is actually for.
+
+    A bench slot is an option on future lineup value, and which weeks it is an
+    option on depends on why you are holding the player:
+
+    - `regular` keeps the base weights.
+    - `stream` counts only the next couple of weeks, because that slot gets
+      churned; a one-week spike should score as a spike, not be averaged away
+      across a season the player will not be here for.
+    - `stash` drops the short-term window and counts what is left, because the
+      slot is held for a player who is not helping yet.
+
+    Falls back to the base weights when a role has no weeks to stand on (late
+    season, where everything remaining is already the short-term window).
+    """
+    if role not in ROLES:
+        raise ValueError(f"Unknown role {role!r}. Use one of {', '.join(ROLES)}.")
+    if role == ROLE_REGULAR:
+        return base
+    weeks = list(context.remaining_weeks)
+    if role == ROLE_STREAM:
+        kept = weeks[: max(1, int(stream_weeks))]
+    else:
+        short = set(context.short_term_week_list)
+        kept = [week for week in weeks if week not in short]
+    raw = {week: base.weight(week) for week in kept}
+    weights, degenerate = _normalize(raw)
+    if degenerate and not raw:
+        return base
+    return WeekWeights(
+        weights=weights,
+        scheme=f"{base.scheme}:{role}",
+        strength=base.strength,
+        cut_wins=base.cut_wins,
+        playoff_odds=base.playoff_odds,
+        game_swing=base.game_swing,
+        degenerate=base.degenerate,
+        notes=base.notes + (f"{role} slot: weeks {kept[0]}-{kept[-1]}" if kept else (),),
+    )
+
+
 def _normalize(raw: dict[int, float]) -> tuple[dict[int, float], bool]:
     total = sum(raw.values())
     if total <= 0:

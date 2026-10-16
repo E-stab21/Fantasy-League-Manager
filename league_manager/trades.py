@@ -31,7 +31,14 @@ from league_manager.slots import (
     slot_eligibility_size,
     slot_name,
 )
-from league_manager.leverage import WeekWeights, week_weights
+from league_manager.leverage import ROLE_REGULAR, WeekWeights, week_weights
+from league_manager.roster_roles import (
+    RoleScorer,
+    assign_roles,
+    choose_forced_drops,
+    role_weight_set,
+    roster_totals,
+)
 from league_manager.value import (
     LeagueContext,
     PlayerValue,
@@ -107,69 +114,52 @@ def resolve_roster_cap(roster: list[dict[str, Any]], context: LeagueContext) -> 
     return len(_active_players(roster))
 
 
-def _drop_row(value: PlayerValue) -> dict[str, Any]:
+def _drop_row(
+    player: dict[str, Any],
+    role: str,
+    scorer: RoleScorer,
+) -> dict[str, Any]:
+    short, long = scorer.split(player, role)
     return {
-        "id": value.id,
-        "name": value.name,
-        "position": value.position,
-        "st_vorp": round(value.st_vorp, 2),
-        "lt_vorp": round(value.lt_vorp, 2),
-        "blended": round(value.blended, 2),
+        "id": player.get("id"),
+        "name": player.get("name"),
+        "position": normalize_position(str(player.get("position") or "")),
+        "role": role,
+        "st_vorp": round(short, 2),
+        "lt_vorp": round(long, 2),
+        "blended": round(short + long, 2),
     }
-
-
-def _roster_vorp_totals(
-    roster: list[dict[str, Any]],
-    value_of,
-) -> tuple[float, float]:
-    st = lt = 0.0
-    seen: set[Any] = set()
-    for player in roster:
-        pid = player.get("id")
-        if pid is None or pid in seen:
-            continue
-        seen.add(pid)
-        value = value_of(player)
-        st += value.st_vorp
-        lt += value.lt_vorp
-    return st, lt
 
 
 def fit_roster_to_cap(
     roster: list[dict[str, Any]],
     *,
     cap: int,
-    protected_ids: set[Any],
-    value_of,
-) -> tuple[list[dict[str, Any]], list[PlayerValue]]:
-    """Drop lowest-VORP leftovers until active size fits the cap.
+    incoming: list[dict[str, Any]],
+    scorer: RoleScorer,
+    roles: dict[Any, str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Cut down to the cap, choosing by who the arrivals make redundant.
 
-    Incoming receive players are protected so the trade is actually kept.
-    IR does not count toward the cap. Empty leftover spots are just absent
-    (replacement-level, ~0 VORP) — no phantom player is added.
+    See `roster_roles.choose_forced_drops`. IR does not count toward the cap,
+    and an empty leftover spot after a net-loss deal is simply absent -- no
+    phantom replacement-level player is added.
     """
     after = list(roster)
-    dropped: list[PlayerValue] = []
     if cap <= 0:
-        return after, dropped
-    keep_ids = set(protected_ids)
-    while len(_active_players(after)) > cap:
-        active = _active_players(after)
-        candidates = [player for player in active if player.get("id") not in keep_ids]
-        if not candidates:
-            candidates = list(active)
-        candidates.sort(
-            key=lambda player: (
-                value_of(player).blended,
-                1 if player.get("is_starter") else 0,
-                value_of(player).lt_vorp,
-                value_of(player).st_vorp,
-            )
-        )
-        cut = candidates[0]
-        cut_id = cut.get("id")
-        dropped.append(value_of(cut))
-        after = [player for player in after if player.get("id") != cut_id]
+        return after, []
+    drops_needed = max(0, len(_active_players(after)) - cap)
+    if drops_needed <= 0:
+        return after, []
+    dropped = choose_forced_drops(
+        after,
+        incoming=incoming,
+        drops_needed=drops_needed,
+        scorer=scorer,
+        roles=roles,
+    )
+    dropped_ids = {player.get("id") for player in dropped}
+    after = [player for player in after if player.get("id") not in dropped_ids]
     return after, dropped
 
 
@@ -382,7 +372,7 @@ def grade_valued_trade(
     recv_lt = sum(item.lt_vorp for item in recv_values)
     roster_delta_st = recv_st - send_st
     roster_delta_lt = recv_lt - send_lt
-    dropped_values: list[PlayerValue] = []
+    dropped_values: list[dict[str, Any]] = []
     roster_before_st = roster_before_lt = None
     roster_after_st = roster_after_lt = None
     roster_cap: int | None = None
@@ -403,35 +393,55 @@ def grade_valued_trade(
     notes.extend(weights.notes)
 
     if our_roster and baselines is not None:
-        valued_cache = {item.id: item for item in send_values + recv_values}
+        if curve_cache is None:
+            curve_cache = {}
 
-        def value_of(player: dict[str, Any]) -> PlayerValue:
+        def curve_for(player: dict[str, Any]) -> dict[int, float | None]:
             pid = player.get("id")
-            if pid in valued_cache:
-                return valued_cache[pid]
-            valued = value_player(
-                player, context, baselines, window=window, weights=weights
-            )
-            valued_cache[pid] = valued
-            return valued
+            cached = curve_cache.get(pid)
+            if cached is None:
+                cached, _ = weekly_projection_curve(player, context)
+                curve_cache[pid] = cached
+            return cached
+
+        role_sets = role_weight_set(weights, context)
+        scorer = RoleScorer(context, baselines, role_sets, curve_for=curve_for)
+        slot_plan = {
+            "stash_slots": context.stash_slots,
+            "stream_slots": context.stream_slots,
+        }
 
         slots = starter_slot_template(our_roster)
         before = list(our_roster)
         raw_after = apply_trade_to_roster(before, send_players, recv_players)
         roster_cap = resolve_roster_cap(before, context)
-        after, dropped_values = fit_roster_to_cap(
+        roles_before = assign_roles(before, scorer=scorer, **slot_plan)
+        # Roles are reassigned on the post-trade roster: an arrival can take a
+        # reserved slot, and the drop is judged against whoever holds what.
+        roles_raw_after = assign_roles(raw_after, scorer=scorer, **slot_plan)
+        after, dropped_players = fit_roster_to_cap(
             raw_after,
             cap=roster_cap,
-            protected_ids={player.get("id") for player in recv_players},
-            value_of=value_of,
+            incoming=recv_players,
+            scorer=scorer,
+            roles=roles_raw_after,
         )
-        roster_before_st, roster_before_lt = _roster_vorp_totals(before, value_of)
-        roster_after_st, roster_after_lt = _roster_vorp_totals(after, value_of)
+        roles_after = (
+            roles_raw_after
+            if not dropped_players
+            else assign_roles(after, scorer=scorer, **slot_plan)
+        )
+        dropped_values = [
+            _drop_row(player, roles_raw_after.get(player.get("id"), ROLE_REGULAR), scorer)
+            for player in dropped_players
+        ]
+        roster_before_st, roster_before_lt = roster_totals(before, scorer)
+        roster_after_st, roster_after_lt = roster_totals(after, scorer)
         roster_delta_st = roster_after_st - roster_before_st
         roster_delta_lt = roster_after_lt - roster_before_lt
         if dropped_values:
             drop_names = ", ".join(
-                f"{item.name or item.id} ({item.position})" for item in dropped_values
+                f"{item['name'] or item['id']} ({item['position']})" for item in dropped_values
             )
             notes.append(
                 f"Roster is full ({roster_cap} active spots); dropping {drop_names} "
@@ -501,7 +511,7 @@ def grade_valued_trade(
         "blended": round(blended, 2),
         "delta_st": round(delta_st, 2),
         "delta_lt": round(delta_lt, 2),
-        "dropped": [_drop_row(item) for item in dropped_values],
+        "dropped": dropped_values,
         "roster": {
             "delta_st": round(roster_delta_st, 2),
             "delta_lt": round(roster_delta_lt, 2),
@@ -594,11 +604,11 @@ def _summary(
     lineup_st: float,
     lineup_lt: float,
     blended: float,
-    dropped: list[PlayerValue] | None = None,
+    dropped: list[dict[str, Any]] | None = None,
 ) -> str:
     drop_bit = ""
     if dropped:
-        names = ", ".join(str(item.name or item.id) for item in dropped)
+        names = ", ".join(str(item["name"] or item["id"]) for item in dropped)
         drop_bit = f"; drop {names} to stay at cap"
     return (
         f"As a {window}: roster ST {roster_st:+.1f} / LT {roster_lt:+.1f}; "
