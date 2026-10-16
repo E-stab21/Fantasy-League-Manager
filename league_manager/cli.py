@@ -7,13 +7,12 @@ import json
 import sys
 from typing import Any
 
-from league_manager.advise import optimal_lineup
 from league_manager.config import ConfigError, auth_status, load_settings
 from league_manager.espn_client import EspnClient
 from league_manager.market import DEFAULT_LOOKBACK
 from league_manager.projections import attach_sleeper_projections, league_scoring
 from league_manager.slots import parse_slot
-from league_manager.value import DEFAULT_SHORT_TERM_WEEKS, context_from_league
+from league_manager.value import DEFAULT_SHORT_TERM_WEEKS
 from league_manager.writes import add_drop_payload, lineup_payload, trade_payload
 
 
@@ -111,20 +110,10 @@ def cmd_activity(args: argparse.Namespace) -> int:
 
 
 def cmd_lineup_advice(args: argparse.Namespace) -> int:
-    client = _client()
-    roster = client.roster(args.team_id)
-    players = roster.get("roster") or []
-    if args.sleeper:
-        players = _attach_sleeper_week(players, client)
-    context = context_from_league(client.league, client.get_team(args.team_id))
-    advice = optimal_lineup(players, context=context)
-    advice["team"] = {"id": roster.get("id"), "name": roster.get("name")}
-    advice["sources"] = {
-        "espn_week": True,
-        "sleeper_week": bool(args.sleeper),
-        "blend": "average" if args.sleeper else "espn",
-    }
-    return _print(advice, args.format)
+    return _print(
+        _client().lineup_advice(args.team_id, sleeper=args.sleeper),
+        args.format,
+    )
 
 
 def cmd_values(args: argparse.Namespace) -> int:

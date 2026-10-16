@@ -35,7 +35,13 @@ def _slot_id(player: dict[str, Any]) -> int | None:
     return int(raw) if raw is not None else None
 
 
-def _sit_reason(player: dict[str, Any]) -> str:
+def _sit_reason(player: dict[str, Any], *, playing: bool = True) -> str:
+    if not playing:
+        # A bye carries no injury status at all, so this has to come first.
+        status = str(player.get("injury_status") or "").upper()
+        if status in {"OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION"}:
+            return f"not playing this week ({status})"
+        return "not playing this week (bye or inactive)"
     if player.get("injured"):
         return "injured"
     status = str(player.get("injury_status") or "").upper()
@@ -119,7 +125,9 @@ def optimal_lineup(
             "position": player.get("position"),
             "slot": player.get("lineup_slot"),
             "projection": round(_score(player), 2),
-            "reason": _sit_reason(player),
+            "reason": _sit_reason(
+                player, playing=player.get("id") in this_week
+            ),
         }
         for player in current_starters
         if player.get("id") not in recommended_ids

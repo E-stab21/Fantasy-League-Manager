@@ -259,6 +259,12 @@ def weekly_projection_curve(
     bye_week = int(bye) if bye is not None else None
 
     def _weeks_from(entries: Any) -> dict[int, float]:
+        """Published numbers per week, zeros included.
+
+        A published 0 is information, not a gap: it is how ESPN marks a bye or a
+        week a player will not play. Dropping it sends the week to a fallback
+        that substitutes a season average, which starts players on bye.
+        """
         found: dict[int, float] = {}
         if not isinstance(entries, dict):
             return found
@@ -269,7 +275,7 @@ def weekly_projection_curve(
                 continue
             raw = entry.get("projected_points") if isinstance(entry, dict) else entry
             value = _float_or_none(raw)
-            if value is not None and value > 0:
+            if value is not None and value >= 0:
                 found[week] = value
         return found
 
@@ -287,9 +293,12 @@ def weekly_projection_curve(
         curve = {}
         for week in weeks:
             points = published.get(week)
-            if points is not None and week in espn_weeks:
-                points = (points + espn_weeks[week]) / 2
-            curve[week] = points
+            espn = espn_weeks.get(week)
+            if not points or espn == 0:
+                # Omitted by Sleeper, or marked zero by either source: not playing.
+                curve[week] = None
+                continue
+            curve[week] = (points + espn) / 2 if espn else points
         covered = sum(1 for week in weeks if curve[week] is not None)
         if covered == len(weeks):
             source = "weekly"
@@ -309,6 +318,10 @@ def weekly_projection_curve(
         curve = {}
         for week in weeks:
             rate = espn_weeks.get(week)
+            if rate == 0:
+                # Published zero: a bye or a week off, not missing data.
+                curve[week] = None
+                continue
             if rate is None:
                 # This week's own number beats a season average spread over it.
                 rate = (weekly_rate(player) or flat) if week == current else flat

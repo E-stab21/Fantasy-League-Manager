@@ -407,3 +407,26 @@ def test_start_sit_trusts_the_week_projection_over_a_stale_injured_flag():
     started = {p["id"] for p in advice["recommended"]}
     assert 1 in started  # flagged but projected: starts
     assert 2 not in started  # genuinely out this week
+
+
+def test_bye_week_player_is_not_started_or_blamed_on_a_projection():
+    ctx = _lineup_ctx()
+    week = ctx.current_week
+    roster = [
+        {
+            "id": 1, "name": "On Bye", "position": "WR", "lineup_slot": "WR",
+            "lineup_slot_id": 4, "projected_points": 20.0,
+            "projected_avg_points": 20.0,
+            "weekly_stats": {str(week): {"projected_points": 0.0}},
+        },
+        {
+            "id": 2, "name": "Playing", "position": "WR", "lineup_slot": "BE",
+            "lineup_slot_id": 20, "projected_points": 9.0,
+            "weekly_stats": {str(week): {"projected_points": 9.0}},
+        },
+    ]
+    advice = optimal_lineup(roster, context=ctx)
+    assert {p["id"] for p in advice["recommended"]} == {2}
+    sat = {row["id"]: row for row in advice["sit"]}
+    assert sat[1]["projection"] == 0.0
+    assert "not playing" in sat[1]["reason"]

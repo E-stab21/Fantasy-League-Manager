@@ -10,7 +10,7 @@ from league_manager.market import DEFAULT_LOOKBACK, find_opportunities
 from league_manager.projections import league_scoring
 from league_manager.search import parse_kinds, search_trades
 from league_manager.serialize import matchup_to_dict, player_to_dict, team_to_dict
-from league_manager.advise import rank_waiver_claims
+from league_manager.advise import optimal_lineup, rank_waiver_claims
 from league_manager.trades import grade_trade
 from league_manager.value import (
     DEFAULT_SHORT_TERM_WEEKS,
@@ -302,6 +302,37 @@ class EspnClient:
             "replacement_weekly": baselines,
             "players": [item.to_dict() for item in valued],
         }
+
+    def lineup_advice(
+        self,
+        team_id: int | None = None,
+        *,
+        sleeper: bool = True,
+    ) -> dict[str, Any]:
+        """Recommend a starting lineup for the current week.
+
+        Uses the same enrichment the valuations do, so Sleeper's per-week curve
+        is available. Without it the only injury and bye signal is ESPN's
+        current-week number, and a player on bye falls back to a season average.
+        """
+        team = self.get_team(team_id)
+        context = context_from_league(self.league, team)
+        payload = team_to_dict(team, include_roster=True)
+        players = self._enrich_players(
+            payload.get("roster") or [],
+            current_week=context.current_week,
+            season_end_week=context.season_end_week,
+            sleeper=sleeper,
+        )
+        advice = optimal_lineup(players, context=context)
+        advice["team"] = {"id": payload.get("id"), "name": payload.get("name")}
+        advice["week"] = context.current_week
+        advice["sources"] = {
+            "espn_week": True,
+            "sleeper_week": bool(sleeper),
+            "blend": "average" if sleeper else "espn",
+        }
+        return advice
 
     def waiver_advice(
         self,

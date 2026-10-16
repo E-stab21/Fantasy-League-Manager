@@ -298,3 +298,29 @@ def test_injury_ramp_only_applies_without_a_published_curve():
     curve, _ = weekly_projection_curve(bare, ctx)
     assert curve[ctx.current_week] == 0.0  # OUT now
     assert curve[ctx.current_week + 3] > 0  # ramped back by then
+
+
+def test_a_published_zero_is_a_bye_not_missing_data():
+    # ESPN marks a bye with a 0.0 projection. Treating that as a gap sends the
+    # week to a fallback that substitutes the season average, which starts
+    # players whose team is not playing.
+    ctx = _ctx()
+    week = ctx.current_week
+    on_bye = {
+        "id": 1,
+        "name": "Bye Week",
+        "position": "WR",
+        "projected_points": 19.65,
+        "projected_avg_points": 19.65,
+        "weekly_stats": {str(week): {"projected_points": 0.0}},
+    }
+    curve, _ = weekly_projection_curve(on_bye, ctx)
+    assert curve[week] is None
+
+    # Same again when a per-week curve exists and leaves the week out.
+    with_curve = dict(on_bye)
+    with_curve["weekly_projections"] = {w: 19.0 for w in ctx.remaining_weeks[1:]}
+    curve, source = weekly_projection_curve(with_curve, ctx)
+    assert source == "weekly_partial"
+    assert curve[week] is None
+    assert curve[ctx.remaining_weeks[1]] == 19.0

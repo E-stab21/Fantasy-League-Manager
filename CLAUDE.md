@@ -84,6 +84,16 @@ and strands points. Eligibility is nested (anyone who fits a `WR` slot also fits
 FLEX), so restrictive-first is optimal here; it matched brute force on a live
 roster where raw order lost up to 2.0 points.
 
+**A published `0` is a bye, not missing data.** ESPN marks a bye (and some
+inactive weeks) with a `0.0` projection. Dropping zeros as if they were gaps
+sends the week to a fallback that substitutes the season average, which starts
+players whose team is not playing. `_weeks_from` keeps zeros and both branches
+map a published zero to `None`.
+
+Anything that recommends a lineup must run on the **full enrichment**
+(`EspnClient.lineup_advice`), not a this-week-only Sleeper attach. Without the
+per-week series the only bye and injury signal is ESPN's current-week number.
+
 `advise.optimal_lineup` (start/sit) takes availability from **this week's
 per-week projection, not the `injured` flag** — the flag goes stale and flagged
 players are routinely still projected to play. Both sides of the reported delta
