@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from league_manager.config import Settings
+from league_manager.leverage import week_weights
 from league_manager.market import DEFAULT_LOOKBACK, find_opportunities
 from league_manager.projections import league_scoring
 from league_manager.search import parse_kinds, search_trades
@@ -281,10 +282,14 @@ class EspnClient:
         )
         baselines = replacement_baselines(free_agents)
         resolved_window = infer_window(context, window)
-        valued = value_players(players, context, baselines, window=resolved_window)
+        weights = week_weights(context)
+        valued = value_players(
+            players, context, baselines, window=resolved_window, weights=weights
+        )
         return {
             "team": {"id": roster.get("id"), "name": roster.get("name")},
             "window": resolved_window,
+            "week_weights": weights.to_dict(),
             "sources": self._ros_source_flags(sleeper=sleeper),
             "context": {
                 "current_week": context.current_week,

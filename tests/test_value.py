@@ -1,10 +1,12 @@
 from league_manager.value import (
     LeagueContext,
+    availability,
     infer_window,
     replacement_baselines,
     ros_points,
     roster_cap_from_settings,
     value_player,
+    weekly_projection_curve,
     weekly_rate,
 )
 
@@ -48,8 +50,17 @@ def test_bye_and_injury_cut_short_term():
     )
     assert healthy.st_games == 2  # weeks 10,12; 11 is bye
     assert healthy.lt_games == 7  # 10-17 minus bye
-    assert healthy.st_vorp == round(16 * 2 - 8 * 2, 2)
     assert healthy.ros_source == "weekly_times_games"
+    # Weighted, so the split adds back to the whole instead of overlapping it.
+    assert round(healthy.st_vorp + healthy.lt_vorp, 6) == round(healthy.blended, 6)
+
+    no_bye = value_player(
+        {"id": 1, "name": "Workhorse", "position": "RB", "projected_points": 16},
+        _ctx(),
+        baselines,
+        window="bubble",
+    )
+    assert no_bye.st_vorp > healthy.st_vorp  # the bye costs a short-term week
 
     out = value_player(
         {
@@ -63,8 +74,12 @@ def test_bye_and_injury_cut_short_term():
         baselines,
         window="contender",
     )
-    assert out.st_points == 0
-    assert out.st_vorp < 0
+    assert out.blended < no_bye.blended
+    # OUT is worth nothing this week but ramps back, rather than taking one flat
+    # discount across the whole season.
+    assert availability(out_player := {"injury_status": "OUT"}, weeks_out=0) == 0.0
+    assert 0.0 < availability(out_player, weeks_out=1) < 1.0
+    assert availability(out_player, weeks_out=3) == 1.0
     assert out.lt_points > 0
 
 
@@ -132,7 +147,20 @@ def test_espn_remainder_beats_flattening_this_week():
         window="bubble",
     )
     assert remainder.ros_source == "espn_remainder"
-    assert remainder.lt_points == 160
+    # 160 points spread over the remaining games, not this week's 8 flattened.
+    curve, _ = weekly_projection_curve(
+        {
+            "id": 1,
+            "position": "RB",
+            "projected_points": 8,
+            "projected_total_points": 200,
+            "points": 40,
+        },
+        _ctx(),
+    )
+    ctx = _ctx()
+    assert round(curve[ctx.current_week], 2) == 8.0  # this week keeps its own number
+    assert round(curve[ctx.current_week + 1], 2) == 20.0  # later weeks get the ROS rate
     assert remainder.lt_vorp > flat.lt_vorp
 
 

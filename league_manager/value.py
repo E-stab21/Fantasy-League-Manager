@@ -1,9 +1,19 @@
-"""Redraft short-term and rest-of-season player value.
+"""Redraft player value, weighted week by week.
 
-Short-term is this week's rate over the next few games. Long-term prefers a
-real remaining-season total (FantasyPros ROS, Sleeper remaining weeks by default,
-or ESPN season projection minus points already scored) before falling back to
-this week flattened across the rest of the year.
+A player's value is the weighted sum of their per-week VORP over the remaining
+weeks:
+
+    value = sum_k  w_k * (projection_k * availability_k - replacement)
+
+`w_k` comes from `leverage.week_weights` and sums to 1, so values read as points
+per weighted game above replacement. Projections prefer a real per-week curve
+(Sleeper publishes one per week) and fall back to a remaining-season total spread
+across the remaining games. Availability ramps an injury back toward full over
+the weeks ahead rather than applying one flat discount to the whole season.
+
+`st_vorp` and `lt_vorp` survive as a split of that single weighted sum — the
+short-term window and everything after it — so they add to `blended` instead of
+overlapping it, which is what used to inflate these numbers.
 """
 
 from __future__ import annotations
@@ -11,6 +21,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable
 
+from league_manager.leverage import WeekWeights, week_weights
 from league_manager.projections import primary_projection
 from league_manager.slots import normalize_position
 
@@ -34,12 +45,23 @@ INJURY_LT_FACTOR = {
     "SUSPENSION": 0.5,
 }
 
-WINDOW_WEIGHTS = {
-    "contender": (0.65, 0.35),
-    "bubble": (0.5, 0.5),
-    "rebuilder": (0.3, 0.7),
+# status -> (share of a game available this week, weeks until back to full).
+# An OUT player is worth nothing now and close to whole in three weeks, which a
+# single season-long discount cannot express.
+INJURY_RAMP = {
+    "IR": (0.0, 6),
+    "INJURY_RESERVE": (0.0, 6),
+    "OUT": (0.0, 3),
+    "SUSPENSION": (0.0, 4),
+    "DOUBTFUL": (0.25, 2),
+    "QUESTIONABLE": (0.75, 1),
 }
+# Flagged injured with no status attached.
+INJURY_RAMP_UNKNOWN = (0.35, 3)
 
+# How urgent the season is. This no longer weights time — `leverage.week_weights`
+# does that from playoff odds — it only picks how much asset depth matters
+# against the starting lineup.
 # roster weight, lineup weight — how much asset VORP vs starting-XI points matter
 STRUCTURE_WEIGHTS = {
     "contender": (0.35, 0.65),
@@ -87,7 +109,7 @@ class LeagueContext:
 
 def infer_window(context: LeagueContext, override: str | None = None) -> str:
     if override and override != "auto":
-        if override not in WINDOW_WEIGHTS:
+        if override not in STRUCTURE_WEIGHTS:
             raise ValueError(f"Unknown window {override!r}. Use contender, bubble, rebuilder, or auto.")
         return override
     rank = context.standing or context.team_count
@@ -97,10 +119,6 @@ def infer_window(context: LeagueContext, override: str | None = None) -> str:
     if rank <= spots + 1 or context.win_pct >= 0.45:
         return "bubble"
     return "rebuilder"
-
-
-def window_weights(window: str) -> tuple[float, float]:
-    return WINDOW_WEIGHTS[window]
 
 
 def structure_weights(window: str) -> tuple[float, float]:
@@ -193,8 +211,101 @@ def injury_factor(player: dict[str, Any], *, horizon: str) -> float:
     return table.get(status, 1.0)
 
 
+def availability(player: dict[str, Any], *, weeks_out: int) -> float:
+    """Share of a full game expected `weeks_out` weeks from now.
+
+    Ramps linearly from the status's immediate share back to 1.0, so an injury
+    discounts the next week or two hard and the rest of the season barely.
+    """
+    status = str(player.get("injury_status") or "").upper()
+    if status in INJURY_RAMP:
+        immediate, ramp = INJURY_RAMP[status]
+    elif player.get("injured"):
+        immediate, ramp = INJURY_RAMP_UNKNOWN
+    else:
+        return 1.0
+    if ramp <= 0 or weeks_out >= ramp:
+        return 1.0
+    return immediate + (1.0 - immediate) * (max(0, weeks_out) / ramp)
+
+
 def games_in_weeks(weeks: Iterable[int], bye_week: int | None) -> list[int]:
     return [week for week in weeks if bye_week is None or int(week) != int(bye_week)]
+
+
+def weekly_projection_curve(
+    player: dict[str, Any],
+    context: LeagueContext,
+) -> tuple[dict[int, float], str]:
+    """Projected points for each remaining week, before injury, plus its source.
+
+    Uses a published per-week number wherever one exists and spreads a
+    remaining-season total across the rest, so a player with a real curve keeps
+    its shape instead of being flattened to one weekly average.
+    """
+    weeks = context.remaining_weeks
+    bye = player.get("bye_week")
+    bye_week = int(bye) if bye is not None else None
+    explicit: dict[int, float] = {}
+    for source_key in ("weekly_projections", "weekly_stats"):
+        entries = player.get(source_key) or {}
+        if not isinstance(entries, dict):
+            continue
+        for key, entry in entries.items():
+            try:
+                week = int(key)
+            except (TypeError, ValueError):
+                continue
+            if week in explicit:
+                continue
+            raw = entry.get("projected_points") if isinstance(entry, dict) else entry
+            value = _float_or_none(raw)
+            if value is not None and value > 0:
+                explicit[week] = value
+
+    games = len(games_in_weeks(weeks, bye_week))
+    # Availability is applied per week below, so take the total undiscounted.
+    total, source = ros_points(player, lt_games=games, lt_factor=1.0)
+    flat = total / games if games else 0.0
+
+    # Published per-week numbers are what make the source a weekly curve. This
+    # week's own rate is a better stand-in than a season average spread back
+    # over it, but it is the same source, so it does not relabel one.
+    published = dict(explicit)
+    current = int(context.current_week)
+    if current not in explicit:
+        rate = weekly_rate(player)
+        if rate > 0:
+            explicit[current] = rate
+
+    curve = {week: explicit.get(week, flat) for week in weeks}
+    if bye_week is not None:
+        curve[bye_week] = 0.0
+    covered = [week for week in weeks if week in published]
+    if covered:
+        source = f"{source}+weekly" if len(covered) < len(weeks) else "weekly"
+    return curve, source
+
+
+def weekly_vorp_curve(
+    player: dict[str, Any],
+    context: LeagueContext,
+    baselines: dict[str, float],
+) -> dict[int, float]:
+    """Per-week points above replacement. Kept out of PlayerValue to stay small."""
+    repl = replacement_weekly(player, baselines)
+    curve, _ = weekly_projection_curve(player, context)
+    bye = player.get("bye_week")
+    bye_week = int(bye) if bye is not None else None
+    vorp: dict[int, float] = {}
+    for week in context.remaining_weeks:
+        if bye_week is not None and week == bye_week:
+            # No game, so a bench starter covers the slot at replacement level.
+            vorp[week] = 0.0
+            continue
+        avail = availability(player, weeks_out=week - int(context.current_week))
+        vorp[week] = curve.get(week, 0.0) * avail - repl
+    return vorp
 
 
 def replacement_baselines(
@@ -240,6 +351,8 @@ class PlayerValue:
     lt_vorp: float
     blended: float
     window: str
+    weight_scheme: str = "leverage"
+    short_term_weight: float = 0.0
     ros_source: str = "weekly_times_games"
     injured: bool = False
     injury_status: str | None = None
@@ -258,29 +371,49 @@ def value_player(
     baselines: dict[str, float],
     *,
     window: str | None = None,
+    weights: WeekWeights | None = None,
 ) -> PlayerValue:
     resolved_window = infer_window(context, window)
-    st_w, lt_w = window_weights(resolved_window)
+    weights = weights or week_weights(context)
     rate = weekly_rate(player)
     repl = replacement_weekly(player, baselines)
     bye = player.get("bye_week")
     bye_week = int(bye) if bye is not None else None
+    short_weeks = set(context.short_term_week_list)
     st_games = games_in_weeks(context.short_term_week_list, bye_week)
     lt_games = games_in_weeks(context.remaining_weeks, bye_week)
-    st_factor = injury_factor(player, horizon="st")
-    lt_factor = injury_factor(player, horizon="lt")
-    st_points = rate * len(st_games) * st_factor
-    lt_points, ros_source = ros_points(player, lt_games=len(lt_games), lt_factor=lt_factor)
-    st_vorp = st_points - repl * len(st_games)
-    lt_vorp = lt_points - repl * len(lt_games)
-    blended = st_w * st_vorp + lt_w * lt_vorp
+
+    curve, ros_source = weekly_projection_curve(player, context)
+    st_vorp = lt_vorp = 0.0
+    st_points = lt_points = 0.0
+    for week in context.remaining_weeks:
+        weight = weights.weight(week)
+        if bye_week is not None and week == bye_week:
+            continue
+        avail = availability(player, weeks_out=week - int(context.current_week))
+        points = curve.get(week, 0.0) * avail
+        contribution = weight * (points - repl)
+        if week in short_weeks:
+            st_points += weight * points
+            st_vorp += contribution
+        else:
+            lt_points += weight * points
+            lt_vorp += contribution
+    # Non-overlapping by construction, so the split adds back to the whole.
+    blended = st_vorp + lt_vorp
+
     notes = []
     if bye_week in context.short_term_week_list:
         notes.append(f"bye in week {bye_week}")
-    if st_factor < 1:
-        notes.append(f"short-term injury discount {st_factor:.0%}")
+    now_avail = availability(player, weeks_out=0)
+    if now_avail < 1:
+        notes.append(f"available {now_avail:.0%} this week, ramping back to full")
     if ros_source != "weekly_times_games":
         notes.append(f"ROS from {ros_source}")
+    notes.append(
+        f"{weights.scheme} weights: {weights.mass(short_weeks):.0%} of the season's "
+        f"weight is in the next {len(context.short_term_week_list)} weeks"
+    )
     return PlayerValue(
         id=player.get("id"),
         name=player.get("name"),
@@ -295,6 +428,8 @@ def value_player(
         lt_vorp=round(lt_vorp, 2),
         blended=round(blended, 2),
         window=resolved_window,
+        weight_scheme=weights.scheme,
+        short_term_weight=round(weights.mass(short_weeks), 4),
         ros_source=ros_source,
         injured=bool(player.get("injured")),
         injury_status=player.get("injury_status"),
@@ -311,8 +446,13 @@ def value_players(
     baselines: dict[str, float],
     *,
     window: str | None = None,
+    weights: WeekWeights | None = None,
 ) -> list[PlayerValue]:
-    valued = [value_player(player, context, baselines, window=window) for player in players]
+    weights = weights or week_weights(context)
+    valued = [
+        value_player(player, context, baselines, window=window, weights=weights)
+        for player in players
+    ]
     valued.sort(key=lambda item: item.blended, reverse=True)
     return valued
 

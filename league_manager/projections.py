@@ -18,7 +18,7 @@ from league_manager.sleeper import (
     players as sleeper_players,
     projection_points,
     projections as sleeper_projections,
-    remaining_week_totals,
+    remaining_week_series,
 )
 
 
@@ -86,7 +86,7 @@ def attach_sleeper_ros(
         state = nfl_state(http_get=http_get)
         season = season or int(state.get("league_season") or state.get("season"))
         current_week = current_week or int(state.get("week") or state.get("display_week") or 1)
-    totals = remaining_week_totals(
+    series = remaining_week_series(
         int(season),
         int(current_week),
         through,
@@ -98,8 +98,13 @@ def attach_sleeper_ros(
     for player in players:
         row = dict(player)
         sleeper_id = str(row.get("sleeper_id") or "")
-        if sleeper_id and sleeper_id in totals:
-            row["sleeper_ros_points"] = round(float(totals[sleeper_id]), 2)
+        weeks = series.get(sleeper_id) if sleeper_id else None
+        if weeks:
+            row["sleeper_ros_points"] = round(sum(weeks.values()), 2)
+            # Keep the shape too, so value can weight each week on its own.
+            row["weekly_projections"] = {
+                week: round(points, 2) for week, points in sorted(weeks.items())
+            }
         enriched.append(row)
     return enriched
 

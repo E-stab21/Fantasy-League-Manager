@@ -17,6 +17,7 @@ from typing import Any, Iterable
 from league_manager.slots import normalize_position
 from league_manager.trades import grade_valued_trade
 from league_manager.trade_market import active_band
+from league_manager.leverage import WeekWeights, week_weights
 from league_manager.value import (
     LeagueContext,
     PlayerValue,
@@ -81,7 +82,7 @@ def _candidates(
             continue
         value = valued[player_id]
         rate = value.weekly_rate or weekly_rate(player)
-        if rate < min_weekly and not player.get("is_starter") and value.lt_vorp < 2:
+        if rate < min_weekly and not player.get("is_starter") and value.lt_vorp < 0.3:
             continue
         rows.append(player)
     rows.sort(key=lambda item: valued[item["id"]].blended, reverse=True)
@@ -124,11 +125,13 @@ def _package_score(blended: float, their_face_net: float, their_lt_net: float) -
     else:
         face_part = -abs(their_face_net - 2.0) * 0.25
 
-    # Their ROS VORP net under our model should stay in a dealable range.
-    if -8.0 <= their_lt_net <= 10.0:
-        ros_part = 2.7 - abs(their_lt_net) * 0.18
+    # Their ROS VORP net under our model should stay in a dealable range. Tuned
+    # to the per-weighted-game scale, where this net spans about +/-14 and the
+    # middle half sits inside -3..+4.
+    if -3.0 <= their_lt_net <= 4.0:
+        ros_part = 2.7 - abs(their_lt_net) * 0.5
     else:
-        ros_part = -abs(their_lt_net) * 0.12
+        ros_part = -abs(their_lt_net) * 0.35
 
     return surplus_part + face_part + ros_part
 
@@ -169,6 +172,7 @@ def search_trades(
     max_their_face: float | None = None,
     min_their_lt: float | None = None,
     max_their_lt: float | None = None,
+    weights: WeekWeights | None = None,
     max_players_per_side: int = MAX_PER_SIDE,
     with_team_id: Any | None = None,
     max_per_opponent: int = MAX_PER_OPPONENT,
@@ -187,8 +191,9 @@ def search_trades(
     if max_their_lt is None:
         max_their_lt = band.max_their_lt
     resolved = infer_window(context, window)
+    weights = weights or week_weights(context)
     valued = {
-        player_id: value_player(player, context, baselines, window=resolved)
+        player_id: value_player(player, context, baselines, window=resolved, weights=weights)
         for player_id, player in players.items()
     }
     faces = {player_id: espn_face_value(player, context) for player_id, player in players.items()}
@@ -214,6 +219,7 @@ def search_trades(
             window=resolved,
             our_roster=our_team.get("roster") or [],
             baselines=baselines,
+            weights=weights,
         )
         their_face_net = sum(faces[player["id"]] for player in send) - sum(
             faces[player["id"]] for player in recv

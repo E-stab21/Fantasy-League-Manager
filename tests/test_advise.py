@@ -190,8 +190,10 @@ def test_waiver_targets_rank_upgrade():
         limit=2,
     )
     assert ranked["window"] == "rebuilder"
-    assert ranked["weights"]["lt"] == 0.7
     assert ranked["weights"]["roster"] == 0.6
+    assert ranked["weights"]["scheme"] == "leverage"
+    # Week weights are a distribution over the remaining weeks.
+    assert round(ranked["weights"]["st"] + ranked["weights"]["lt"], 6) == 1.0
     targets = ranked["targets"]
     assert targets[0]["name"] == "Waiver Star"
     assert targets[0]["drop_candidate"] == "Handcuff"

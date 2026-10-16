@@ -26,13 +26,13 @@ from league_manager.slots import (
     player_fits_slot,
     slot_name,
 )
+from league_manager.leverage import WeekWeights, week_weights
 from league_manager.value import (
     LeagueContext,
     PlayerValue,
     infer_window,
     structure_weights,
     value_player,
-    window_weights,
 )
 
 # Typical ESPN 10-team starter set when roster slots are missing.
@@ -257,10 +257,15 @@ def lineup_vorp_vs_floor(
     value: PlayerValue,
     floor_weekly: dict[str, float],
 ) -> tuple[float, float]:
-    """Lineup-shaped VORP when we cannot run an optimal lineup delta."""
+    """Lineup-shaped VORP when we cannot run an optimal lineup delta.
+
+    `st_points` / `lt_points` are week-weighted, so the floor is charged against
+    each split's share of the season's weight, not its raw game count.
+    """
     floor = float(floor_weekly.get(value.position) or 0.0)
-    st = value.st_points - floor * value.st_games
-    lt = value.lt_points - floor * value.lt_games
+    st_weight = float(value.short_term_weight)
+    st = value.st_points - floor * st_weight
+    lt = value.lt_points - floor * max(0.0, 1.0 - st_weight)
     return st, lt
 
 
@@ -305,8 +310,12 @@ def grade_valued_trade(
     our_roster: list[dict[str, Any]] | None = None,
     baselines: dict[str, float] | None = None,
     starter_floors: dict[str, float] | None = None,
+    weights: WeekWeights | None = None,
 ) -> dict[str, Any]:
-    st_w, lt_w = window_weights(window)
+    weights = weights or week_weights(context)
+    short_weeks = set(context.short_term_week_list)
+    st_w = weights.mass(short_weeks)
+    lt_w = max(0.0, 1.0 - st_w)
     roster_w, lineup_w = structure_weights(window)
 
     send_st = sum(item.st_vorp for item in send_values)
@@ -326,11 +335,14 @@ def grade_valued_trade(
     lineup_before_st: list[dict[str, Any]] = []
     lineup_after_st: list[dict[str, Any]] = []
     notes = [
-        f"Redraft window is {window} (ST {st_w:.0%}/LT {lt_w:.0%}; "
-        f"roster {roster_w:.0%}/lineup {lineup_w:.0%}).",
+        f"Weeks are weighted by {weights.scheme} ({st_w:.0%} of the season's weight "
+        f"sits in the next {len(short_weeks)} weeks, {lt_w:.0%} after); "
+        f"roster {roster_w:.0%}/lineup {lineup_w:.0%}.",
         "Roster surplus is after minus before (waiver-replacement VORP); "
         "lineup surplus uses starting XI points.",
+        "Values are points per weighted game above replacement.",
     ]
+    notes.extend(weights.notes)
 
     if our_roster and baselines is not None:
         valued_cache = {item.id: item for item in send_values + recv_values}
@@ -339,7 +351,9 @@ def grade_valued_trade(
             pid = player.get("id")
             if pid in valued_cache:
                 return valued_cache[pid]
-            valued = value_player(player, context, baselines, window=window)
+            valued = value_player(
+                player, context, baselines, window=window, weights=weights
+            )
             valued_cache[pid] = valued
             return valued
 
@@ -404,7 +418,9 @@ def grade_valued_trade(
 
     delta_st = roster_w * roster_delta_st + lineup_w * lineup_delta_st
     delta_lt = roster_w * roster_delta_lt + lineup_w * lineup_delta_lt
-    blended = st_w * delta_st + lt_w * delta_lt
+    # The splits are already week-weighted and do not overlap, so they add
+    # rather than needing a second round of short-term / long-term weighting.
+    blended = delta_st + delta_lt
 
     if lineup_delta_st > 1 or lineup_delta_lt > 1:
         notes.append("Lineup improves — consolidation / upgrade shows up without a stud tax.")
@@ -416,10 +432,12 @@ def grade_valued_trade(
     return {
         "window": window,
         "weights": {
-            "st": st_w,
-            "lt": lt_w,
+            "st": round(st_w, 4),
+            "lt": round(lt_w, 4),
             "roster": roster_w,
             "lineup": lineup_w,
+            "scheme": weights.scheme,
+            "playoff_odds": round(weights.playoff_odds, 3),
         },
         "grade": letter_grade(blended),
         "verdict": verdict(blended),
@@ -473,14 +491,22 @@ def grade_trade(
     window: str | None = None,
     our_roster: list[dict[str, Any]] | None = None,
     starter_floors: dict[str, float] | None = None,
+    weights: WeekWeights | None = None,
 ) -> dict[str, Any]:
     if not send_ids or not receive_ids:
         raise ValueError("Trade grade needs at least one send id and one receive id")
     send_players = [_lookup(players, player_id) for player_id in send_ids]
     recv_players = [_lookup(players, player_id) for player_id in receive_ids]
     resolved_window = infer_window(context, window)
-    send_values = [value_player(player, context, baselines, window=resolved_window) for player in send_players]
-    recv_values = [value_player(player, context, baselines, window=resolved_window) for player in recv_players]
+    weights = weights or week_weights(context)
+    send_values = [
+        value_player(player, context, baselines, window=resolved_window, weights=weights)
+        for player in send_players
+    ]
+    recv_values = [
+        value_player(player, context, baselines, window=resolved_window, weights=weights)
+        for player in recv_players
+    ]
     roster = our_roster
     if roster is None:
         # Prefer full roster if callers stuffed team_id onto players.
@@ -498,6 +524,7 @@ def grade_trade(
         our_roster=roster,
         baselines=baselines,
         starter_floors=starter_floors,
+        weights=weights,
     )
 
 

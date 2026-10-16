@@ -218,7 +218,7 @@ def test_starter_floor_mode_without_roster():
     assert grade["roster"]["delta_st"] != 0 or grade["lineup"]["delta_st"] != 0
 
 
-def test_rebuilder_weights_rest_of_season_more():
+def test_losing_record_weights_the_games_in_front_of_you():
     baselines = {"RB": 8.0, "WR": 8.0, "QB": 12.0, "TE": 5.0, "K": 5.0, "D/ST": 5.0}
     players = _players()
     players[4] = {
@@ -249,8 +249,16 @@ def test_rebuilder_weights_rest_of_season_more():
         window="contender",
         our_roster=_roster(players, roster_ids),
     )
-    assert rebuild["weights"]["lt"] > contend["weights"]["lt"]
-    assert rebuild["blended"] > contend["blended"]
+    # A losing team is unlikely to reach the playoff weeks, so the weight sits
+    # on the games it still has to win. A contender weights those playoff weeks
+    # instead. This is the inverse of the old record-keyed window weighting.
+    assert rebuild["weights"]["st"] > contend["weights"]["st"]
+    assert contend["weights"]["lt"] > rebuild["weights"]["lt"]
+    assert contend["weights"]["playoff_odds"] > rebuild["weights"]["playoff_odds"]
+    # Weights are a distribution over the remaining weeks, so the split is whole.
+    for grade in (rebuild, contend):
+        assert round(grade["weights"]["st"] + grade["weights"]["lt"], 6) == 1.0
+        assert round(grade["delta_st"] + grade["delta_lt"], 6) == round(grade["blended"], 6)
 
 
 def test_one_for_two_full_roster_subtracts_forced_drop():

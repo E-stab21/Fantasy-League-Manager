@@ -13,13 +13,13 @@ from league_manager.slots import (
     player_fits_slot,
     slot_name,
 )
+from league_manager.leverage import week_weights
 from league_manager.trades import grade_valued_trade
 from league_manager.value import (
     LeagueContext,
     infer_window,
     structure_weights,
     value_player,
-    window_weights,
 )
 
 
@@ -241,10 +241,12 @@ def rank_waiver_claims(
 ) -> dict[str, Any]:
     """Rank add/drop claims with the same ST/LT roster + lineup math as trades."""
     resolved = infer_window(context, window)
-    st_w, lt_w = window_weights(resolved)
+    weights = week_weights(context)
+    st_w = weights.mass(context.short_term_week_list)
+    lt_w = max(0.0, 1.0 - st_w)
     roster_w, lineup_w = structure_weights(resolved)
     valued = {
-        player["id"]: value_player(player, context, baselines, window=resolved)
+        player["id"]: value_player(player, context, baselines, window=resolved, weights=weights)
         for player in roster + free_agents
         if player.get("id") is not None
     }
@@ -268,6 +270,7 @@ def rank_waiver_claims(
                 window=resolved,
                 our_roster=roster,
                 baselines=baselines,
+                weights=weights,
             )
             compact = _compact_claim_grade(grade)
             same_pos = str(drop.get("position") or "") == fa_pos
@@ -317,7 +320,14 @@ def rank_waiver_claims(
     rows.sort(key=lambda row: (row["blended"], row.get("delta_lt") or 0), reverse=True)
     return {
         "window": resolved,
-        "weights": {"st": st_w, "lt": lt_w, "roster": roster_w, "lineup": lineup_w},
+        "weights": {
+            "st": round(st_w, 4),
+            "lt": round(lt_w, 4),
+            "roster": roster_w,
+            "lineup": lineup_w,
+            "scheme": weights.scheme,
+            "playoff_odds": round(weights.playoff_odds, 3),
+        },
         "ir_stash_alerts": ir_stash_alerts(roster),
         "targets": rows[:limit],
     }

@@ -7,6 +7,8 @@ would corrupt valuations.
 
 from __future__ import annotations
 
+import math
+
 import json
 import os
 import random
@@ -41,13 +43,19 @@ SKIP_POS = {"K", "DEF", "DL", "LB", "DB", "IDP"}
 DEFAULT_CACHE = Path(os.getenv("XDG_CACHE_HOME", Path.home() / ".cache")) / "league-manager"
 BAND_PATH = DEFAULT_CACHE / "trade_band.json"
 
-# Built-in realism band (raised from early Sleeper accept samples).
+# Built-in realism band.
+#
+# Surplus and their-ROS limits are in points per weighted game above
+# replacement (see leverage.week_weights), measured against the spread of real
+# 1:1 packages in this league: blended runs about -15..+16 with a median near
+# zero, and their-ROS net about -14..+13. ESPN face value is untouched by that
+# weighting and stays on its raw season-points scale.
 DEFAULT_MIN_SURPLUS = 1.0
-DEFAULT_MAX_SURPLUS = 40.0
+DEFAULT_MAX_SURPLUS = 12.0
 DEFAULT_MIN_THEIR_FACE = -55.0
 DEFAULT_MAX_THEIR_FACE = 15.0
-DEFAULT_MIN_THEIR_LT = -80.0
-DEFAULT_MAX_THEIR_LT = 25.0
+DEFAULT_MIN_THEIR_LT = -14.0
+DEFAULT_MAX_THEIR_LT = 4.5
 
 
 @dataclass(frozen=True)
@@ -398,16 +406,16 @@ def _percentile(vals: list[float], p: float) -> float:
 
 
 def _round_up_5(value: float) -> float:
+    """Round up to a whole point. Steps of 5 were far too coarse once values
+    moved to a per-weighted-game scale that only spans about +/-16."""
     if value <= 0:
         return 0.0
-    return float(5 * int((value + 4.999) // 5))
+    return float(math.ceil(value - 1e-9))
 
 
 def _round_down_5(value: float) -> float:
-    if value >= 0:
-        return float(5 * int(value // 5))
-    # more negative floor toward -inf in steps of 5
-    return float(-5 * int((-value + 4.999) // 5))
+    """Round down to a whole point, matching `_round_up_5`'s step."""
+    return float(math.floor(value + 1e-9))
 
 
 def recommend_band(win_sides: list[dict[str, Any]], current: Band, *, min_sample: int = 8) -> dict[str, Any]:
@@ -436,12 +444,12 @@ def recommend_band(win_sides: list[dict[str, Any]], current: Band, *, min_sample
     # (huge dynasty-like smash in a thin sample) cannot open the floodgates.
     raw_top = _round_up_5(blend_p75)
     suggested_max = max(current.max_surplus, raw_top)
-    suggested_max = min(suggested_max, current.max_surplus + 20.0)
+    suggested_max = min(suggested_max, current.max_surplus + 4.0)
     suggested_max = min(suggested_max, max(current.max_surplus, _round_up_5(blend_p90)))
 
     # Floors: allow them to give up what the market gave up, but not unbounded.
     suggested_min_face = min(current.min_their_face, max(_round_down_5(face_p10), -120.0))
-    suggested_min_lt = min(current.min_their_lt, max(_round_down_5(lt_p10), -150.0))
+    suggested_min_lt = min(current.min_their_lt, max(_round_down_5(lt_p10), -30.0))
 
     recommended = Band(
         min_surplus=current.min_surplus,
