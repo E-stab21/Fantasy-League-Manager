@@ -98,13 +98,16 @@ def attach_sleeper_ros(
     for player in players:
         row = dict(player)
         sleeper_id = str(row.get("sleeper_id") or "")
-        weeks = series.get(sleeper_id) if sleeper_id else None
-        if weeks:
-            row["sleeper_ros_points"] = round(sum(weeks.values()), 2)
-            # Keep the shape too, so value can weight each week on its own.
+        if sleeper_id:
+            weeks = series.get(sleeper_id) or {}
+            # Set the key even when empty. Sleeper omits the weeks it expects a
+            # player to miss, so "matched, nothing published" means not playing,
+            # which is different from a player Sleeper does not cover at all.
             row["weekly_projections"] = {
                 week: round(points, 2) for week, points in sorted(weeks.items())
             }
+            if weeks:
+                row["sleeper_ros_points"] = round(sum(weeks.values()), 2)
         enriched.append(row)
     return enriched
 

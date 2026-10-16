@@ -85,4 +85,6 @@ Submit only when the user says to execute, then add `--confirm`. Live posts also
 
 ## Projections
 
-Do not train a model unless asked. Start/sit averages ESPN + Sleeper this-week projections. Trade and waiver ROS defaults to Sleeper remaining weeks (FantasyPros first if `FANTASYPROS_API_KEY` is set), then ESPN season projection minus points scored. Research notes live in `docs/PREDICTION_MODELS.md`.
+Do not train a model unless asked. Start/sit averages ESPN + Sleeper this-week projections. Trade and waiver values weight each remaining week separately from Sleeper's per-week curve (FantasyPros first if `FANTASYPROS_API_KEY` is set), falling back to ESPN season projection minus points scored. Research notes live in `docs/PREDICTION_MODELS.md`.
+
+Injury is already in those projections — Sleeper marks down an iffy week and omits the weeks a player is expected to miss — so do not discount again by the ESPN `injury_status` tag, which goes stale (players tagged `INJURY_RESERVE` are often still projected at full strength). A `ros_source` of `weekly_none` means the curve covers them and projects no remaining week: out for the foreseeable future, graded 0. An omitted week is worth 0, not a penalty, because a bench starter covers the slot.

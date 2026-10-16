@@ -42,12 +42,24 @@ value = sum_k  w_k * (projection_k * availability_k - replacement)
 - `st_vorp` and `lt_vorp` are a **non-overlapping split** of that one weighted sum
   (short-term window / everything after), so `st_vorp + lt_vorp == blended`.
   They used to overlap, double-counting the near weeks and inflating every value.
-- Projections prefer a real per-week curve (Sleeper publishes one per week, via
-  `sleeper.remaining_week_series`); the current week keeps its own projection, and
-  any week without a published number gets the remaining-season total spread
-  across the remaining games.
-- Injuries ramp back toward full over the weeks ahead (`INJURY_RAMP`) instead of
-  taking one flat season-long discount.
+- **Injury is already priced into the published projections — do not discount it
+  again.** Sleeper publishes a full-season per-week curve
+  (`sleeper.remaining_week_series`) and signals an injury two ways: it marks down
+  the week a questionable player is iffy for, and it **omits the weeks it expects
+  them to miss entirely**. Both are better than the ESPN `injury_status` tag,
+  which goes stale — players tagged `INJURY_RESERVE` are routinely still
+  projected at full strength every week.
+- So for a player the curve covers: present weeks are taken as published, and an
+  absent week is a week off. A week off scores **no surplus, not a penalty** — a
+  bench starter covers the slot, so the week is worth 0, not `-replacement`.
+  Covered with nothing published at all (`ros_source == "weekly_none"`) means out
+  for the foreseeable future and grades 0. The roster spot such a player occupies
+  is priced by the forced-drop logic, not here.
+- `availability` / `INJURY_RAMP` is a **fallback only**, for a player with no
+  per-week curve (notably D/ST), where the status tag is the only signal there is.
+- ESPN's `weekly_stats` only ever holds the current and past weeks, so **its gaps
+  must never be read as weeks off.** Only `weekly_projections` (Sleeper) carries
+  meaningful absences. Conflating the two reads every D/ST as missing the season.
 - `window` (contender / bubble / rebuilder) no longer weights time. It only sets
   `STRUCTURE_WEIGHTS` — how much asset depth matters against the starting lineup.
 

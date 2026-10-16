@@ -181,3 +181,120 @@ def test_roster_cap_from_settings_skips_ir():
     assert roster_cap_from_settings(_Settings()) == 16
     assert roster_cap_from_settings(None) is None
     assert roster_cap_from_settings(object()) is None
+
+
+def test_published_curve_is_trusted_over_a_stale_injury_tag():
+    # Several players carry an INJURY_RESERVE tag while the per-week source
+    # still projects them at full strength every week. The tag is stale; the
+    # curve is the better signal and must not be discounted by it.
+    baselines = {"WR": 9.0}
+    weeks = _ctx().remaining_weeks
+    tagged = value_player(
+        {
+            "id": 1,
+            "name": "Stale Tag",
+            "position": "WR",
+            "injury_status": "INJURY_RESERVE",
+            "weekly_projections": {week: 15.0 for week in weeks},
+        },
+        _ctx(),
+        baselines,
+    )
+    healthy = value_player(
+        {
+            "id": 2,
+            "name": "Healthy",
+            "position": "WR",
+            "injury_status": "ACTIVE",
+            "weekly_projections": {week: 15.0 for week in weeks},
+        },
+        _ctx(),
+        baselines,
+    )
+    assert tagged.ros_source == "weekly"
+    assert tagged.blended == healthy.blended == round(15.0 - 9.0, 2)
+
+
+def test_omitted_weeks_score_no_surplus_rather_than_a_penalty():
+    # The source leaves out the weeks it expects a player to miss. A bench
+    # starter covers that slot, so those weeks are worth nothing extra -- not
+    # a full replacement level of damage.
+    baselines = {"WR": 9.0}
+    ctx = _ctx()
+    played = {week: 15.0 for week in ctx.remaining_weeks[2:]}
+    curve, source = weekly_projection_curve(
+        {"id": 1, "position": "WR", "weekly_projections": played}, ctx
+    )
+    assert source == "weekly_partial"
+    assert curve[ctx.remaining_weeks[0]] is None
+    assert curve[ctx.remaining_weeks[2]] == 15.0
+
+    partial = value_player(
+        {"id": 1, "name": "Back Soon", "position": "WR", "weekly_projections": played},
+        ctx,
+        baselines,
+    )
+    full = value_player(
+        {
+            "id": 2,
+            "name": "All Season",
+            "position": "WR",
+            "weekly_projections": {week: 15.0 for week in ctx.remaining_weeks},
+        },
+        ctx,
+        baselines,
+    )
+    assert 0 < partial.blended < full.blended
+
+
+def test_covered_but_nothing_published_is_worth_zero():
+    # Matched by the per-week source with no remaining week projected: out for
+    # the foreseeable future, so no surplus either way.
+    out = value_player(
+        {
+            "id": 1,
+            "name": "Done For Now",
+            "position": "RB",
+            "injury_status": "INJURY_RESERVE",
+            "projected_avg_points": 12.0,
+            "weekly_projections": {},
+        },
+        _ctx(),
+        {"RB": 8.0},
+    )
+    assert out.ros_source == "weekly_none"
+    assert out.blended == 0.0
+
+
+def test_espn_week_gaps_are_not_read_as_weeks_off():
+    # ESPN's weekly_stats only ever holds the current and past weeks, so its
+    # gaps say nothing about whether a player is playing.
+    ctx = _ctx()
+    curve, source = weekly_projection_curve(
+        {
+            "id": 1,
+            "position": "D/ST",
+            "projected_points": 7.0,
+            "projected_total_points": 100.0,
+            "points": 10.0,
+            "weekly_stats": {str(ctx.current_week): {"projected_points": 7.0}},
+        },
+        ctx,
+    )
+    assert all(value is not None for value in curve.values())
+    assert "espn_week" in source
+
+
+def test_injury_ramp_only_applies_without_a_published_curve():
+    baselines = {"RB": 8.0}
+    ctx = _ctx()
+    bare = {
+        "id": 1,
+        "name": "No Curve",
+        "position": "RB",
+        "projected_points": 16.0,
+        "injury_status": "OUT",
+    }
+    curve, _ = weekly_projection_curve(bare, ctx)
+    assert curve[ctx.current_week] == 0.0  # OUT now
+    assert curve[ctx.current_week + 3] > 0  # ramped back by then

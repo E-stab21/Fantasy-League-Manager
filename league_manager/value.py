@@ -236,54 +236,77 @@ def games_in_weeks(weeks: Iterable[int], bye_week: int | None) -> list[int]:
 def weekly_projection_curve(
     player: dict[str, Any],
     context: LeagueContext,
-) -> tuple[dict[int, float], str]:
-    """Projected points for each remaining week, before injury, plus its source.
+) -> tuple[dict[int, float | None], str]:
+    """Expected points per remaining week, or None for a week not being played.
 
-    Uses a published per-week number wherever one exists and spreads a
-    remaining-season total across the rest, so a player with a real curve keeps
-    its shape instead of being flattened to one weekly average.
+    A published per-week projection is trusted as given. The sources already
+    price an injury into the week it affects (a questionable starter is marked
+    down that week and whole the next), and they signal the weeks a player is
+    expected to miss by omitting them entirely, which is a better timeline than
+    any status tag -- players carrying a stale `INJURY_RESERVE` tag are still
+    projected at full strength every week, and discounting those by the tag
+    would throw away the better signal.
+
+    So `availability` only applies to a player with no published per-week
+    coverage at all, where the status tag is the only injury information there
+    is. A week with coverage elsewhere but none of its own is a week off (a bye
+    or an injury); a bench starter covers that slot, so it scores no surplus
+    rather than a penalty.
     """
     weeks = context.remaining_weeks
+    current = int(context.current_week)
     bye = player.get("bye_week")
     bye_week = int(bye) if bye is not None else None
-    explicit: dict[int, float] = {}
-    for source_key in ("weekly_projections", "weekly_stats"):
-        entries = player.get(source_key) or {}
+
+    def _weeks_from(entries: Any) -> dict[int, float]:
+        found: dict[int, float] = {}
         if not isinstance(entries, dict):
-            continue
+            return found
         for key, entry in entries.items():
             try:
                 week = int(key)
             except (TypeError, ValueError):
                 continue
-            if week in explicit:
-                continue
             raw = entry.get("projected_points") if isinstance(entry, dict) else entry
             value = _float_or_none(raw)
             if value is not None and value > 0:
-                explicit[week] = value
+                found[week] = value
+        return found
 
-    games = len(games_in_weeks(weeks, bye_week))
-    # Availability is applied per week below, so take the total undiscounted.
-    total, source = ros_points(player, lt_games=games, lt_factor=1.0)
-    flat = total / games if games else 0.0
-
-    # Published per-week numbers are what make the source a weekly curve. This
-    # week's own rate is a better stand-in than a season average spread back
-    # over it, but it is the same source, so it does not relabel one.
-    published = dict(explicit)
-    current = int(context.current_week)
-    if current not in explicit:
-        rate = weekly_rate(player)
-        if rate > 0:
-            explicit[current] = rate
-
-    curve = {week: explicit.get(week, flat) for week in weeks}
+    curve: dict[int, float | None]
+    sleeper_curve = player.get("weekly_projections")
+    if isinstance(sleeper_curve, dict):
+        # Sleeper publishes the whole remaining season and leaves out the weeks
+        # it expects a player to miss, so an absence here is information.
+        published = _weeks_from(sleeper_curve)
+        curve = {week: published.get(week) for week in weeks}
+        covered = sum(1 for week in weeks if curve[week] is not None)
+        if covered == len(weeks):
+            source = "weekly"
+        elif covered:
+            source = "weekly_partial"
+        else:
+            source = "weekly_none"
+    else:
+        # No per-week curve for this player, so spread a remaining-season total
+        # and lean on the status tag for availability. ESPN's weekly_stats only
+        # ever holds the current and past weeks, so its gaps say nothing about
+        # whether a player is playing and must not be read as weeks off.
+        games = len(games_in_weeks(weeks, bye_week))
+        total, source = ros_points(player, lt_games=games, lt_factor=1.0)
+        flat = total / games if games else 0.0
+        espn_weeks = _weeks_from(player.get("weekly_stats"))
+        curve = {}
+        for week in weeks:
+            rate = espn_weeks.get(week)
+            if rate is None:
+                # This week's own number beats a season average spread over it.
+                rate = (weekly_rate(player) or flat) if week == current else flat
+            curve[week] = rate * availability(player, weeks_out=week - current)
+        if any(week in espn_weeks for week in weeks):
+            source = f"{source}+espn_week"
     if bye_week is not None:
-        curve[bye_week] = 0.0
-    covered = [week for week in weeks if week in published]
-    if covered:
-        source = f"{source}+weekly" if len(covered) < len(weeks) else "weekly"
+        curve[bye_week] = None
     return curve, source
 
 
@@ -295,16 +318,11 @@ def weekly_vorp_curve(
     """Per-week points above replacement. Kept out of PlayerValue to stay small."""
     repl = replacement_weekly(player, baselines)
     curve, _ = weekly_projection_curve(player, context)
-    bye = player.get("bye_week")
-    bye_week = int(bye) if bye is not None else None
     vorp: dict[int, float] = {}
     for week in context.remaining_weeks:
-        if bye_week is not None and week == bye_week:
-            # No game, so a bench starter covers the slot at replacement level.
-            vorp[week] = 0.0
-            continue
-        avail = availability(player, weeks_out=week - int(context.current_week))
-        vorp[week] = curve.get(week, 0.0) * avail - repl
+        points = curve.get(week)
+        # A week off scores no surplus: a bench starter covers that slot.
+        vorp[week] = 0.0 if points is None else points - repl
     return vorp
 
 
@@ -386,12 +404,14 @@ def value_player(
     curve, ros_source = weekly_projection_curve(player, context)
     st_vorp = lt_vorp = 0.0
     st_points = lt_points = 0.0
+    weeks_off: list[int] = []
     for week in context.remaining_weeks:
-        weight = weights.weight(week)
-        if bye_week is not None and week == bye_week:
+        points = curve.get(week)
+        if points is None:
+            # A week off scores no surplus: a bench starter covers that slot.
+            weeks_off.append(week)
             continue
-        avail = availability(player, weeks_out=week - int(context.current_week))
-        points = curve.get(week, 0.0) * avail
+        weight = weights.weight(week)
         contribution = weight * (points - repl)
         if week in short_weeks:
             st_points += weight * points
@@ -405,9 +425,17 @@ def value_player(
     notes = []
     if bye_week in context.short_term_week_list:
         notes.append(f"bye in week {bye_week}")
-    now_avail = availability(player, weeks_out=0)
-    if now_avail < 1:
-        notes.append(f"available {now_avail:.0%} this week, ramping back to full")
+    if weeks_off:
+        shown = ", ".join(str(week) for week in weeks_off[:6])
+        more = f" (+{len(weeks_off) - 6} more)" if len(weeks_off) > 6 else ""
+        notes.append(f"not projected to play weeks {shown}{more}")
+    elif "weekly" not in ros_source:
+        now_avail = availability(player, weeks_out=0)
+        if now_avail < 1:
+            notes.append(
+                f"no weekly projections published; {player.get('injury_status')} "
+                f"discounts this week to {now_avail:.0%}, ramping back to full"
+            )
     if ros_source != "weekly_times_games":
         notes.append(f"ROS from {ros_source}")
     notes.append(
