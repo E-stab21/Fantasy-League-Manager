@@ -30,6 +30,11 @@ from league_manager.value import LeagueContext, replacement_weekly, weighted_vor
 
 ROLES_ALL = (ROLE_REGULAR, ROLE_STASH, ROLE_STREAM)
 
+# Defenses are a streaming position by nature -- churned on matchup, never held
+# for a season -- so one is always a streaming slot regardless of what its curve
+# looks like, and it consumes stream capacity like any other occupant.
+ALWAYS_STREAM_POSITIONS = {"D/ST"}
+
 DEFAULT_STASH_SLOTS = 2
 DEFAULT_STREAM_SLOTS = 2
 
@@ -122,22 +127,27 @@ def assign_roles(
     regular curve: a starter's week-to-week worth is already carried by the
     lineup term.
     """
+    capacity = {
+        ROLE_STASH: max(0, int(stash_slots)),
+        ROLE_STREAM: max(0, int(stream_slots)),
+    }
     roles: dict[Any, str] = {}
     bench: list[dict[str, Any]] = []
     for player in roster:
         pid = player.get("id")
         if pid is None:
             continue
+        # A defense is always a streaming slot, starter or not, and takes up
+        # stream capacity -- so only one other streamer can be held alongside it.
+        if normalize_position(str(player.get("position") or "")) in ALWAYS_STREAM_POSITIONS:
+            roles[pid] = ROLE_STREAM
+            capacity[ROLE_STREAM] = max(0, capacity[ROLE_STREAM] - 1)
+            continue
         slot = _slot_id(player)
         if slot == IR_SLOT or is_starter_slot(slot):
             roles[pid] = ROLE_REGULAR
             continue
         bench.append(player)
-
-    capacity = {
-        ROLE_STASH: max(0, int(stash_slots)),
-        ROLE_STREAM: max(0, int(stream_slots)),
-    }
     # role -> [(role value, gain, player)] for everyone who clears the bar
     qualified: dict[str, list[tuple[float, float, dict[str, Any]]]] = {
         ROLE_STASH: [],

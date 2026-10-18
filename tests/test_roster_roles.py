@@ -283,3 +283,34 @@ def test_an_arrival_does_not_inherit_the_dropped_players_role():
     # Whoever was cut, the arrival stays ordinary depth: roles are re-derived
     # from the criteria, never handed down from the player who left.
     assert after_roles[9] == ROLE_REGULAR
+
+
+def test_a_defense_is_always_a_streaming_slot_and_eats_its_capacity():
+    # Defenses are churned on matchup, never held for a season, so the label is
+    # unconditional -- and it occupies a stream slot like any other tenant.
+    ctx = _ctx()
+    weeks = ctx.remaining_weeks
+    scorer = _scorer(ctx, {"D/ST": 5.0, "WR": 8.0})
+    # Flat curve, starting slot: qualifies for nothing by the normal criteria.
+    defense = _bench(1, "Some D/ST", "D/ST", {w: 7.0 for w in weeks}, lineup_slot="D/ST", lineup_slot_id=16)
+    strong_streamer = _bench(2, "Hot Now", "WR", {w: 26.0 for w in weeks[:2]} | {w: 8.1 for w in weeks[2:]})
+    other_streamer = _bench(3, "Also Hot", "WR", {w: 22.0 for w in weeks[:2]} | {w: 8.1 for w in weeks[2:]})
+
+    roles = assign_roles([defense, strong_streamer, other_streamer], scorer=scorer, stream_slots=2, stash_slots=0)
+    assert roles[1] == ROLE_STREAM  # unconditional, despite a flat curve
+    # One stream slot is left, so only the more valuable streamer gets it.
+    assert roles[2] == ROLE_STREAM
+    assert roles[3] == ROLE_REGULAR
+    assert scorer.value(strong_streamer, ROLE_STREAM) > scorer.value(other_streamer, ROLE_STREAM)
+
+
+def test_two_defenses_consume_the_whole_stream_allowance():
+    ctx = _ctx()
+    weeks = ctx.remaining_weeks
+    scorer = _scorer(ctx, {"D/ST": 5.0, "WR": 8.0})
+    d1 = _bench(1, "D One", "D/ST", {w: 7.0 for w in weeks}, lineup_slot="D/ST", lineup_slot_id=16)
+    d2 = _bench(2, "D Two", "D/ST", {w: 6.0 for w in weeks})
+    streamer = _bench(3, "Hot Now", "WR", {w: 26.0 for w in weeks[:2]} | {w: 8.1 for w in weeks[2:]})
+    roles = assign_roles([d1, d2, streamer], scorer=scorer, stream_slots=2, stash_slots=0)
+    assert roles[1] == ROLE_STREAM and roles[2] == ROLE_STREAM
+    assert roles[3] == ROLE_REGULAR  # no stream capacity left for a real streamer

@@ -69,6 +69,13 @@ distribution before touching those cutoffs.**
 
 ## Starting lineup
 
+The lineup term is `(lineup value after the move) − (lineup value before)`,
+both measured over the whole remaining season on the **base** distribution.
+**Role curves never touch it** — it is a plain estimate of lineup strength, and
+a player's stash or stream label changes nothing here. (For scale: on a live
+trade the base distribution gives a before-value of 117.05 where the stream
+distribution would give 114.73; the latter is not used anywhere.)
+
 Lineups are reset weekly, so the lineup is **re-optimized for every remaining
 week** and the weeks are then weighted (`trades.weekly_lineup_points`). A player
 available for only part of the stretch counts in the weeks he plays and is
@@ -127,6 +134,11 @@ Two separate questions decide who holds a slot:
   third qualifier worth more in the role displaces the weakest incumbent. A
   player qualifying for both prefers the role it gains more from and is
   considered for the other only if that one is full.
+
+**A defense is always a streaming slot** (`ALWAYS_STREAM_POSITIONS`), starter or
+not, whatever its curve looks like — it is churned on matchup, never held for a
+season. It consumes stream capacity like any other tenant, so only one other
+streamer can be held alongside it.
 
 Qualification is about the **shape** of a curve: back-loaded gains under `stash`,
 front-loaded under `stream`. On the live roster at a 0.5 threshold only two
