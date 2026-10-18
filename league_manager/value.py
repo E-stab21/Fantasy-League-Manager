@@ -89,6 +89,9 @@ class LeagueContext:
     # A lens, not a holdback -- see roster_roles.
     stash_slots: int = 2
     stream_slots: int = 2
+    # How much more a role curve must be worth than the regular one before a
+    # player counts as a specialist, in points per weighted game.
+    role_gain_threshold: float = 0.5
 
     @property
     def remaining_weeks(self) -> list[int]:

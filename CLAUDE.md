@@ -115,11 +115,23 @@ has its own week curve (`leverage.role_weights`):
 - `stash` — the short-term window dropped, so a player who is not helping yet is
   credited for the weeks he comes back
 
-A player takes a reserved slot when that slot's curve scores them *above* the
-regular curve, which is a statement about the **shape** of their curve: a
-back-loaded player gains under `stash`, a front-loaded one under `stream`. A flat
-curve scores identically under any normalized weighting, so it never qualifies
-(hence `MIN_ROLE_GAIN` — without it, floating-point noise hands out slots).
+Two separate questions decide who holds a slot:
+
+- **Does a player qualify?** Only if its role curve is worth at least
+  `role_gain_threshold` (default **0.5** pts/weighted game, on `LeagueContext`)
+  more than the regular curve. A slight lean is not a specialism. Without a real
+  floor a flat curve qualifies on rounding noise, since a flat curve scores
+  identically under any normalized weighting.
+- **Who gets the slot?** The highest **value** in that role — not the biggest
+  gain, and not whoever was there first. The slot exists to be used well, so a
+  third qualifier worth more in the role displaces the weakest incumbent. A
+  player qualifying for both prefers the role it gains more from and is
+  considered for the other only if that one is full.
+
+Qualification is about the **shape** of a curve: back-loaded gains under `stash`,
+front-loaded under `stream`. On the live roster at a 0.5 threshold only two
+players qualify; at an epsilon threshold four did, including a 0.37 lean that is
+really just depth.
 
 **A role curve is a yardstick for a head-to-head, not a discount on what a
 player is worth to own.** `roster_totals` deliberately scores everyone on the
@@ -130,6 +142,10 @@ A genuine streamer already scores low later; their own curve does that work.
 
 The reservation is a lens, not a holdback — same number of active spots, and a
 role with no good occupant just holds ordinary depth.
+
+**An arrival never inherits the dropped player's role.** Roles are re-derived
+from the threshold and the caps on the post-trade roster, so a flat arrival
+replacing a stash stays ordinary depth.
 
 ### Choosing the forced drop
 
@@ -149,8 +165,11 @@ agree on 87% of real packages, so bulk ranking uses the proxy and the decision
 you act on uses the exact one. **That divergence is deliberate** — a trade can
 show a different drop in search than in its own grade.
 
-The proxy's yardstick is the **marginal arrival**: the *weakest* of the arrivals,
-judged at its own best use (`roster_roles.marginal_arrival`). On a full roster
+The proxy's yardstick is the **marginal arrival**: the weakest of the arrivals,
+**averaged across all three role curves** (`roster_roles.marginal_arrival`).
+Averaging rather than judging each arrival on one curve keeps the yardstick
+independent of which slot an arrival happens to land in, and stops a narrow
+one-week spike passing itself off as the stronger piece. On a full roster
 the player causing the squeeze is the last man in, not the stud — the stud
 displaces someone good. Using the best arrival instead makes every incumbent look
 badly beaten and collapses the rule into "cut the lowest-value player", which is

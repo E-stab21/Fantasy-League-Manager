@@ -202,3 +202,84 @@ def test_no_drop_when_the_roster_already_fits():
     ctx = _ctx()
     scorer = _scorer(ctx, {"WR": 8.0})
     assert choose_forced_drops([], incoming=[], drops_needed=0, scorer=scorer, roles={}) == []
+
+
+def test_a_slight_lean_is_not_a_specialism():
+    # Qualification is a real threshold, not an epsilon: a player whose role
+    # curve is only marginally better is ordinary depth.
+    ctx = _ctx()
+    weeks = ctx.remaining_weeks
+    scorer = _scorer(ctx, {"WR": 8.0})
+    # 9.2 now, 9.0 later: leans front, nowhere near half a point a game.
+    slight = _bench(1, "Slight Lean", "WR", {w: 9.2 for w in weeks[:2]} | {w: 9.0 for w in weeks[2:]})
+    regular_value = scorer.value(slight, ROLE_REGULAR)
+    assert 0 < scorer.value(slight, ROLE_STREAM) - regular_value < 0.5
+    assert assign_roles([slight], scorer=scorer)[1] == ROLE_REGULAR
+
+    # Same shape, far bigger gap: now it is a streamer.
+    real = _bench(2, "Real Streamer", "WR", {w: 24.0 for w in weeks[:2]} | {w: 8.2 for w in weeks[2:]})
+    assert scorer.value(real, ROLE_STREAM) - scorer.value(real, ROLE_REGULAR) >= 0.5
+    assert assign_roles([real], scorer=scorer)[2] == ROLE_STREAM
+
+
+def test_a_third_qualifier_worth_more_takes_the_slot():
+    # Cap of two, and the slot goes to the highest value in the role -- not the
+    # biggest gain, and not whoever was there first.
+    ctx = _ctx()
+    weeks = ctx.remaining_weeks
+    scorer = _scorer(ctx, {"WR": 8.0})
+    weak_a = _bench(1, "Weak Stash A", "WR", {w: 14.0 for w in weeks[3:]})
+    weak_b = _bench(2, "Weak Stash B", "WR", {w: 13.5 for w in weeks[3:]})
+    strong = _bench(3, "Strong Stash", "WR", {w: 30.0 for w in weeks[3:]})
+
+    two_only = assign_roles([weak_a, weak_b], scorer=scorer, stream_slots=0)
+    assert two_only[1] == two_only[2] == ROLE_STASH  # both fit while there is room
+
+    with_third = assign_roles([weak_a, weak_b, strong], scorer=scorer, stream_slots=0)
+    held = {pid for pid, role in with_third.items() if role == ROLE_STASH}
+    assert held == {1, 3}  # the strongest two by stash value
+    assert with_third[2] == ROLE_REGULAR  # lowest-valued incumbent swapped out
+    assert scorer.value(weak_b, ROLE_STASH) < scorer.value(weak_a, ROLE_STASH)
+
+
+def test_marginal_arrival_averages_across_all_three_roles():
+    ctx = _ctx()
+    weeks = ctx.remaining_weeks
+    scorer = _scorer(ctx, {"WR": 8.0})
+    # Useful only in a narrow window, so strong on one curve and thin overall.
+    spike = _bench(9, "Spike", "WR", {w: 20.0 for w in weeks[:2]})
+    allround = _bench(10, "All Round", "WR", {w: 15.0 for w in weeks})
+    picked = marginal_arrival([spike, allround], scorer=scorer)
+
+    def avg(player):
+        return sum(scorer.value(player, r) for r in (ROLE_REGULAR, ROLE_STASH, ROLE_STREAM)) / 3
+
+    assert avg(spike) < avg(allround)
+    assert picked["id"] == 9
+    # Judged on its single best curve instead, the spike would look like the
+    # stronger piece and the yardstick would be wrong.
+    assert scorer.value(spike, ROLE_STREAM) > scorer.value(allround, ROLE_STREAM)
+
+
+def test_an_arrival_does_not_inherit_the_dropped_players_role():
+    ctx = _ctx()
+    weeks = ctx.remaining_weeks
+    scorer = _scorer(ctx, {"WR": 8.0, "RB": 8.0})
+    # Holds the only stash slot.
+    stashed = _bench(1, "Stashed", "WR", {w: 20.0 for w in weeks[3:]})
+    spare = _bench(2, "Spare", "RB", {w: 9.0 for w in weeks})
+    # Flat, so it qualifies for nothing however the roster shakes out.
+    flat_arrival = _bench(9, "Flat Arrival", "WR", {w: 15.0 for w in weeks})
+    roster = [stashed, spare, flat_arrival]
+    roles = assign_roles(roster, scorer=scorer, stash_slots=1, stream_slots=1)
+    assert roles[1] == ROLE_STASH
+    assert roles[9] == ROLE_REGULAR
+
+    dropped = choose_forced_drops(
+        roster, incoming=[flat_arrival], drops_needed=1, scorer=scorer, roles=roles
+    )
+    after = [p for p in roster if p["id"] != dropped[0]["id"]]
+    after_roles = assign_roles(after, scorer=scorer, stash_slots=1, stream_slots=1)
+    # Whoever was cut, the arrival stays ordinary depth: roles are re-derived
+    # from the criteria, never handed down from the player who left.
+    assert after_roles[9] == ROLE_REGULAR

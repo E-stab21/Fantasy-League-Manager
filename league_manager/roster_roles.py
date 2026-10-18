@@ -28,12 +28,17 @@ from league_manager.leverage import (
 from league_manager.slots import IR_SLOT, is_starter_slot, normalize_position, parse_slot
 from league_manager.value import LeagueContext, replacement_weekly, weighted_vorp
 
+ROLES_ALL = (ROLE_REGULAR, ROLE_STASH, ROLE_STREAM)
+
 DEFAULT_STASH_SLOTS = 2
 DEFAULT_STREAM_SLOTS = 2
 
-# A flat curve scores identically under any normalized weighting, so a role can
-# only ever add floating-point noise for one. Require a real gain.
-MIN_ROLE_GAIN = 1e-6
+# A player earns a reserved slot only when its curve is worth a real amount more
+# than the regular one, in the same points-per-weighted-game units as everything
+# else. Below this they are ordinary depth that happens to lean slightly one way.
+# (A flat curve scores identically under any normalized weighting, so without
+# some floor floating-point noise alone would hand out slots.)
+DEFAULT_ROLE_GAIN_THRESHOLD = 0.5
 
 
 def _slot_id(player: dict[str, Any]) -> int | None:
@@ -99,14 +104,23 @@ def assign_roles(
     scorer: RoleScorer,
     stash_slots: int = DEFAULT_STASH_SLOTS,
     stream_slots: int = DEFAULT_STREAM_SLOTS,
+    gain_threshold: float = DEFAULT_ROLE_GAIN_THRESHOLD,
 ) -> dict[Any, str]:
     """Decide which bench players occupy the stash and stream slots.
 
-    Starters and IR keep the regular curve: a starter's week-to-week worth is
-    already carried by the lineup term. Among the bench, a reserved slot goes to
-    whoever gains most from being valued on that slot's curve rather than the
-    regular one, which is what makes a part-time player land in the slot that
-    actually suits them.
+    Two separate questions, deliberately:
+
+    - **Does a player qualify?** Only if its role curve is worth at least
+      `gain_threshold` more than the regular curve. A slight lean is not a
+      specialism, and without a floor a flat curve qualifies on rounding noise.
+    - **Who gets the slot?** The highest *value* in that role, not the biggest
+      gain. The slot exists to be used well, so a third qualifier worth more in
+      the role displaces the weakest incumbent.
+
+    A player qualifying for both prefers the role it gains more from, and is
+    considered for the other only if that one is full. Starters and IR keep the
+    regular curve: a starter's week-to-week worth is already carried by the
+    lineup term.
     """
     roles: dict[Any, str] = {}
     bench: list[dict[str, Any]] = []
@@ -120,24 +134,46 @@ def assign_roles(
             continue
         bench.append(player)
 
-    capacity = {ROLE_STASH: max(0, int(stash_slots)), ROLE_STREAM: max(0, int(stream_slots))}
-    gains: list[tuple[float, Any, str]] = []
+    capacity = {
+        ROLE_STASH: max(0, int(stash_slots)),
+        ROLE_STREAM: max(0, int(stream_slots)),
+    }
+    # role -> [(role value, gain, player)] for everyone who clears the bar
+    qualified: dict[str, list[tuple[float, float, dict[str, Any]]]] = {
+        ROLE_STASH: [],
+        ROLE_STREAM: [],
+    }
+    preferred: dict[Any, str] = {}
     for player in bench:
         pid = player.get("id")
         baseline = scorer.value(player, ROLE_REGULAR)
+        best_gain = 0.0
+        for role in (ROLE_STASH, ROLE_STREAM):
+            value = scorer.value(player, role)
+            gain = value - baseline
+            if gain < gain_threshold:
+                continue
+            qualified[role].append((value, gain, player))
+            if gain > best_gain:
+                best_gain = gain
+                preferred[pid] = role
+
+    # Fill each slot with the most valuable qualifier that prefers it, then let
+    # anyone still unplaced compete for whatever capacity is left.
+    for pass_number in (1, 2):
         for role in (ROLE_STASH, ROLE_STREAM):
             if capacity[role] <= 0:
                 continue
-            gain = scorer.value(player, role) - baseline
-            if gain > MIN_ROLE_GAIN:
-                gains.append((gain, pid, role))
+            ranked = sorted(qualified[role], key=lambda row: row[0], reverse=True)
+            for value, _gain, player in ranked:
+                pid = player.get("id")
+                if pid in roles or capacity[role] <= 0:
+                    continue
+                if pass_number == 1 and preferred.get(pid) != role:
+                    continue
+                roles[pid] = role
+                capacity[role] -= 1
 
-    gains.sort(key=lambda row: row[0], reverse=True)
-    for _gain, pid, role in gains:
-        if pid in roles or capacity[role] <= 0:
-            continue
-        roles[pid] = role
-        capacity[role] -= 1
     for player in bench:
         roles.setdefault(player.get("id"), ROLE_REGULAR)
     return roles
@@ -185,22 +221,27 @@ def marginal_arrival(
     incoming: list[dict[str, Any]],
     *,
     scorer: RoleScorer,
-    roles: dict[Any, str],
+    roles: dict[Any, str] | None = None,
 ) -> dict[str, Any] | None:
-    """The arrival that causes the squeeze: the weakest, at its own best use.
+    """The arrival that causes the squeeze: the weakest across all three roles.
 
-    Each arrival is judged on the role it would actually occupy, so a package of
-    a stud and a streamer compares the streamer on the streaming curve rather
-    than penalising it for a season it was never going to be here for.
+    Averaged over regular, stash and stream rather than judged on one curve, so
+    the yardstick does not depend on which slot the arrival happens to land in
+    -- and an arrival that is only useful in a slot it cannot get does not pass
+    itself off as the stronger piece.
+
+    On a full roster this is the player who actually forces the drop. The stud
+    in a package displaces someone good; the last man in pushes the final body
+    off the roster.
     """
     if not incoming:
         return None
-    return min(
-        incoming,
-        key=lambda player: scorer.value(
-            player, roles.get(player.get("id"), ROLE_REGULAR)
-        ),
-    )
+
+    def across_roles(player: dict[str, Any]) -> float:
+        values = [scorer.value(player, role) for role in ROLES_ALL]
+        return sum(values) / len(values)
+
+    return min(incoming, key=across_roles)
 
 
 def choose_forced_drops(
