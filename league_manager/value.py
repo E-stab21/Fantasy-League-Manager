@@ -90,8 +90,17 @@ class LeagueContext:
     stash_slots: int = 2
     stream_slots: int = 2
     # How much more a role curve must be worth than the regular one before a
-    # player counts as a specialist, in points per weighted game.
+    # player counts as a specialist, in points per weighted game. Used for the
+    # stream test; stash uses the normalized ratio below.
     role_gain_threshold: float = 0.5
+    # Stash qualification. The delta is normalized by |stash value|, which makes
+    # it the share of the season's weight the player is missing in the short
+    # window -- fully absent across the window lands on the window mass itself,
+    # whatever the player is worth. The floor keeps a near-zero denominator from
+    # inflating a trivial delta: a player not worth a roster spot is not worth a
+    # reserved one either.
+    stash_ratio_threshold: float = 0.25
+    role_value_floor: float = 1.0
 
     @property
     def remaining_weeks(self) -> list[int]:

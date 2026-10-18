@@ -486,6 +486,8 @@ def grade_valued_trade(
             "stash_slots": context.stash_slots,
             "stream_slots": context.stream_slots,
             "gain_threshold": context.role_gain_threshold,
+            "stash_ratio_threshold": context.stash_ratio_threshold,
+            "value_floor": context.role_value_floor,
         }
 
         slots = starter_slot_template(our_roster)

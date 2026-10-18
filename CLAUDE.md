@@ -124,11 +124,39 @@ has its own week curve (`leverage.role_weights`):
 
 Two separate questions decide who holds a slot:
 
-- **Does a player qualify?** Only if its role curve is worth at least
-  `role_gain_threshold` (default **0.5** pts/weighted game, on `LeagueContext`)
-  more than the regular curve. A slight lean is not a specialism. Without a real
-  floor a flat curve qualifies on rounding noise, since a flat curve scores
-  identically under any normalized weighting.
+- **Does a player qualify?** The stash and stream tests differ, deliberately.
+
+  **Stash** uses a *normalized* delta (`roster_roles.stash_ratio`):
+  `(stash − regular) / |stash|`, which must clear `stash_ratio_threshold`
+  (default **0.25**), and the stash value must clear `role_value_floor`
+  (default **1.0**).
+
+  The normalization is the whole point. For a player simply absent across the
+  short window the ratio comes out as **the base weight of the weeks missed**,
+  so a full-window absence lands on the window mass (0.278 here) whether the
+  player is worth +2.3, +2.8 or −2.3. An absolute gain cannot do this: it
+  measures quality, not absence. Measured, a stud missing **one bye week**
+  scored +1.04 against +0.64 and +0.78 for mid players out for the **whole
+  window** — no threshold separates those, which is why this is a ratio.
+  Dividing by `|stash|` rather than `stash` keeps the sign honest: for a
+  declining player both values are negative and an unsigned divide reads a
+  decline as stash shape (Romeo Doubs, playing all three window weeks, read
+  +0.326 before and −0.326 after). The ratio is also stable across a 3-week and
+  a 4-week absence where the raw delta was not (0.64 vs 0.53).
+
+  The value floor exists because a near-zero denominator inflates a trivial
+  delta — Malik Washington read **+0.443**, the highest on the roster, off a
+  delta of 0.12 on a value of 0.28. A player who would not hold a roster spot
+  does not deserve a reserved one. A sub-replacement player whose return is
+  weak lands negative and is excluded by design (Pittman, −0.278).
+
+  **Stream** still uses the absolute gain against `role_gain_threshold`
+  (default 0.5), with no value floor. **Known asymmetry**: that leaves the
+  stream side with both problems the stash side just fixed — it is
+  magnitude-driven, and four below-replacement players on the live roster are
+  stream-eligible, two of them with a *negative* stream value (Kamara −0.60,
+  Bates −0.86). Ranking by role value currently masks it, since a positive
+  player wins the slot, but the qualification itself is wrong.
 - **Who gets the slot?** The highest **value** in that role — not the biggest
   gain, and not whoever was there first. The slot exists to be used well, so a
   third qualifier worth more in the role displaces the weakest incumbent. A

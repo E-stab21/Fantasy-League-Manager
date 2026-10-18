@@ -44,6 +44,28 @@ DEFAULT_STREAM_SLOTS = 2
 # (A flat curve scores identically under any normalized weighting, so without
 # some floor floating-point noise alone would hand out slots.)
 DEFAULT_ROLE_GAIN_THRESHOLD = 0.5
+DEFAULT_STASH_RATIO_THRESHOLD = 0.25
+DEFAULT_ROLE_VALUE_FLOOR = 1.0
+
+
+def stash_ratio(regular_value: float, stash_value: float) -> float:
+    """Stash delta as a share of what the stash curve is worth.
+
+    Dividing by |stash| rather than stash keeps the sign honest: for a player
+    who is worse in the later weeks, both values are negative and an unsigned
+    divide would read a decline as stash shape.
+
+    For a player with a roughly flat curve who is simply absent across the short
+    window, this comes out as the base weight of the weeks missed -- so a full
+    window absence lands on the window mass itself regardless of whether the
+    player is worth +3 or -3. That is the point: it measures absence, not
+    quality. A player whose return is below replacement lands negative and does
+    not qualify, which is correct -- if they would not hold a roster spot they
+    do not deserve a reserved one.
+    """
+    if abs(stash_value) < 1e-9:
+        return 0.0
+    return (stash_value - regular_value) / abs(stash_value)
 
 
 def _slot_id(player: dict[str, Any]) -> int | None:
@@ -110,6 +132,8 @@ def assign_roles(
     stash_slots: int = DEFAULT_STASH_SLOTS,
     stream_slots: int = DEFAULT_STREAM_SLOTS,
     gain_threshold: float = DEFAULT_ROLE_GAIN_THRESHOLD,
+    stash_ratio_threshold: float = DEFAULT_STASH_RATIO_THRESHOLD,
+    value_floor: float = DEFAULT_ROLE_VALUE_FLOOR,
 ) -> dict[Any, str]:
     """Decide which bench players occupy the stash and stream slots.
 
@@ -161,7 +185,15 @@ def assign_roles(
         for role in (ROLE_STASH, ROLE_STREAM):
             value = scorer.value(player, role)
             gain = value - baseline
-            if gain < gain_threshold:
+            if role == ROLE_STASH:
+                # Absence, measured as a share of the stash curve's own worth,
+                # so a stud missing one bye week cannot outrank a mid player
+                # genuinely out for the whole window.
+                if value < value_floor:
+                    continue
+                if stash_ratio(baseline, value) < stash_ratio_threshold:
+                    continue
+            elif gain < gain_threshold:
                 continue
             qualified[role].append((value, gain, player))
             if gain > best_gain:
