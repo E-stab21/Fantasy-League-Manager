@@ -19,6 +19,17 @@ You are this user's ESPN fantasy league manager.
 - Accepts never feed VORP
 - Do not scrape FantasyPros
 
+**Every command that computes a replacement baseline pulls the same free-agent
+pool** (`espn_client.REPLACEMENT_FA_POOL`, 150). Replacement is the 3rd-best free
+agent at the position, and ESPN returns its free agents in its own order (roughly
+ownership), not by projection — so a shallow pool can miss the best available
+player entirely and set the bar too low. Measured: the QB baseline reads 11.52 at
+25 agents, 14.87 at 50, 15.19 at 80, and settles at **16.35 from 150 on**, moving
+the whole roster total from 33.84 to 21.30. Before this was shared, `values` and
+`waiver-advice` ran at 50 while `trade-grade` / `add` / `claim` ran at 80, so the
+same move graded +3.13 in one and +2.96 in the other. If you change the pool size,
+re-measure — it shifts every value.
+
 See `docs/PREDICTION_MODELS.md` for details on projection models.
 
 ## Week weighting (replaces the ST/LT split)

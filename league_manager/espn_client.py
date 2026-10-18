@@ -30,6 +30,15 @@ SPORT_IMPORT = {
     "nhl": "espn_api.hockey",
 }
 
+# How many free agents to pull when the pool is what sets replacement level.
+# ESPN returns its own order (roughly ownership), not projection order, so a
+# shallow pool can miss the best available player at a position entirely and
+# set the bar too low. Measured: the QB baseline reads 11.52 at 25 agents,
+# 14.87 at 50, 15.19 at 80 and settles at 16.35 from 150 on, swinging the whole
+# roster total from 33.84 to 21.30 on a scale where a trade blend is +/-16.
+# Every command that computes a baseline uses this, so they agree on the bar.
+REPLACEMENT_FA_POOL = 150
+
 
 class EspnClient:
     def __init__(self, settings: Settings, league: Any | None = None):
@@ -238,7 +247,7 @@ class EspnClient:
         self,
         extra: list[dict[str, Any]] | None = None,
         *,
-        fa_size: int = 80,
+        fa_size: int = REPLACEMENT_FA_POOL,
     ) -> dict[Any, dict[str, Any]]:
         found = self.rostered_players()
         for player in extra or []:
@@ -257,7 +266,7 @@ class EspnClient:
         window: str = "auto",
         short_term_weeks: int = DEFAULT_SHORT_TERM_WEEKS,
         season_end_week: int | None = None,
-        fa_size: int = 50,
+        fa_size: int = REPLACEMENT_FA_POOL,
         sleeper: bool = True,
     ) -> dict[str, Any]:
         team = self.get_team(team_id)
@@ -392,7 +401,7 @@ class EspnClient:
         )
         roster_payload = team_to_dict(team, include_roster=True)
         roster = roster_payload.get("roster") or []
-        mixed_fa = self.free_agents(size=max(int(size), 50))
+        mixed_fa = self.free_agents(size=max(int(size), REPLACEMENT_FA_POOL))
         target_fa = self.free_agents(position=position, size=size) if position else mixed_fa
         roster = self._enrich_players(
             roster,
@@ -451,7 +460,7 @@ class EspnClient:
         window: str = "auto",
         short_term_weeks: int = DEFAULT_SHORT_TERM_WEEKS,
         season_end_week: int | None = None,
-        fa_size: int = 80,
+        fa_size: int = REPLACEMENT_FA_POOL,
         sleeper: bool = True,
     ) -> dict[str, Any]:
         team = self.get_team(team_id)
@@ -501,7 +510,7 @@ class EspnClient:
         season_end_week: int | None = None,
         lookback: int = DEFAULT_LOOKBACK,
         limit: int = 8,
-        fa_size: int = 50,
+        fa_size: int = REPLACEMENT_FA_POOL,
         sleeper: bool = True,
     ) -> dict[str, Any]:
         team = self.get_team(team_id)
@@ -548,7 +557,7 @@ class EspnClient:
         min_surplus: float | None = None,
         max_surplus: float | None = None,
         with_team_id: int | None = None,
-        fa_size: int = 50,
+        fa_size: int = REPLACEMENT_FA_POOL,
         sleeper: bool = True,
     ) -> dict[str, Any]:
         team = self.get_team(team_id)
