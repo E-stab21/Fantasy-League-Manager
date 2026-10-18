@@ -304,8 +304,8 @@ class EspnClient:
             scorer=scorer,
             stash_slots=context.stash_slots,
             stream_slots=context.stream_slots,
-            gain_threshold=context.role_gain_threshold,
             stash_ratio_threshold=context.stash_ratio_threshold,
+            stream_ratio_threshold=context.stream_ratio_threshold,
             value_floor=context.role_value_floor,
         )
         by_id = {player.get("id"): player for player in players}

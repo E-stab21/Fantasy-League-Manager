@@ -38,34 +38,40 @@ ALWAYS_STREAM_POSITIONS = {"D/ST"}
 DEFAULT_STASH_SLOTS = 2
 DEFAULT_STREAM_SLOTS = 2
 
-# A player earns a reserved slot only when its curve is worth a real amount more
-# than the regular one, in the same points-per-weighted-game units as everything
-# else. Below this they are ordinary depth that happens to lean slightly one way.
-# (A flat curve scores identically under any normalized weighting, so without
-# some floor floating-point noise alone would hand out slots.)
-DEFAULT_ROLE_GAIN_THRESHOLD = 0.5
+# A player earns a reserved slot only when its curve is shaped enough like the
+# role to clear `role_ratio`, and only when the role is worth holding a spot for
+# at all. (A flat curve scores identically under any normalized weighting, so
+# without some floor floating-point noise alone would hand out slots, and a
+# near-zero role value makes a trivial delta look enormous.)
 DEFAULT_STASH_RATIO_THRESHOLD = 0.25
+DEFAULT_STREAM_RATIO_THRESHOLD = 0.40
 DEFAULT_ROLE_VALUE_FLOOR = 1.0
 
 
-def stash_ratio(regular_value: float, stash_value: float) -> float:
-    """Stash delta as a share of what the stash curve is worth.
+def role_ratio(regular_value: float, role_value: float) -> float:
+    """Role delta as a share of what that role curve is worth.
 
-    Dividing by |stash| rather than stash keeps the sign honest: for a player
-    who is worse in the later weeks, both values are negative and an unsigned
-    divide would read a decline as stash shape.
+    `(role - regular) / |role|`. Normalizing strips out player quality, which an
+    absolute gain cannot: it scales with how good someone is rather than how
+    role-shaped their curve is, so a stud missing one bye week outscored mid
+    players out for a whole window.
 
-    For a player with a roughly flat curve who is simply absent across the short
-    window, this comes out as the base weight of the weeks missed -- so a full
-    window absence lands on the window mass itself regardless of whether the
-    player is worth +3 or -3. That is the point: it measures absence, not
-    quality. A player whose return is below replacement lands negative and does
-    not qualify, which is correct -- if they would not hold a roster spot they
-    do not deserve a reserved one.
+    Dividing by the absolute value rather than the signed one keeps the sign
+    honest. For a declining player both values are negative, and an unsigned
+    divide reads the decline as stash shape.
+
+    For stash, a roughly flat player simply absent across the short window comes
+    out at the base weight of the weeks missed, so a full-window absence lands
+    on the window mass itself whether the player is worth +3 or -3. For stream
+    the natural ceiling is `1 - (stream window mass)`, reached by someone who
+    plays only that window -- though the ratio runs past it when the regular
+    value is negative, which honestly means "more than all of my worth sits in
+    the window". Qualification is all it feeds, and slots rank by role value, so
+    an unbounded ratio cannot win a slot it has not earned.
     """
-    if abs(stash_value) < 1e-9:
+    if abs(role_value) < 1e-9:
         return 0.0
-    return (stash_value - regular_value) / abs(stash_value)
+    return (role_value - regular_value) / abs(role_value)
 
 
 def _slot_id(player: dict[str, Any]) -> int | None:
@@ -131,8 +137,8 @@ def assign_roles(
     scorer: RoleScorer,
     stash_slots: int = DEFAULT_STASH_SLOTS,
     stream_slots: int = DEFAULT_STREAM_SLOTS,
-    gain_threshold: float = DEFAULT_ROLE_GAIN_THRESHOLD,
     stash_ratio_threshold: float = DEFAULT_STASH_RATIO_THRESHOLD,
+    stream_ratio_threshold: float = DEFAULT_STREAM_RATIO_THRESHOLD,
     value_floor: float = DEFAULT_ROLE_VALUE_FLOOR,
 ) -> dict[Any, str]:
     """Decide which bench players occupy the stash and stream slots.
@@ -140,8 +146,9 @@ def assign_roles(
     Two separate questions, deliberately:
 
     - **Does a player qualify?** Only if its role curve is worth at least
-      `gain_threshold` more than the regular curve. A slight lean is not a
-      specialism, and without a floor a flat curve qualifies on rounding noise.
+      its ratio threshold once player quality is normalized out, and the role
+      curve itself has to clear `value_floor` -- someone who would not hold a
+      roster spot does not deserve a reserved one.
     - **Who gets the slot?** The highest *value* in that role, not the biggest
       gain. The slot exists to be used well, so a third qualifier worth more in
       the role displaces the weakest incumbent.
@@ -185,15 +192,15 @@ def assign_roles(
         for role in (ROLE_STASH, ROLE_STREAM):
             value = scorer.value(player, role)
             gain = value - baseline
-            if role == ROLE_STASH:
-                # Absence, measured as a share of the stash curve's own worth,
-                # so a stud missing one bye week cannot outrank a mid player
-                # genuinely out for the whole window.
-                if value < value_floor:
-                    continue
-                if stash_ratio(baseline, value) < stash_ratio_threshold:
-                    continue
-            elif gain < gain_threshold:
+            # Both roles qualify the same way: the curve has to be worth
+            # holding at all, and the lean has to be real once player quality
+            # is normalized out.
+            if value < value_floor:
+                continue
+            floor = (
+                stash_ratio_threshold if role == ROLE_STASH else stream_ratio_threshold
+            )
+            if role_ratio(baseline, value) < floor:
                 continue
             qualified[role].append((value, gain, player))
             if gain > best_gain:

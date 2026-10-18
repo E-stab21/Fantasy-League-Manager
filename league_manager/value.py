@@ -89,17 +89,15 @@ class LeagueContext:
     # A lens, not a holdback -- see roster_roles.
     stash_slots: int = 2
     stream_slots: int = 2
-    # How much more a role curve must be worth than the regular one before a
-    # player counts as a specialist, in points per weighted game. Used for the
-    # stream test; stash uses the normalized ratio below.
-    role_gain_threshold: float = 0.5
-    # Stash qualification. The delta is normalized by |stash value|, which makes
-    # it the share of the season's weight the player is missing in the short
-    # window -- fully absent across the window lands on the window mass itself,
-    # whatever the player is worth. The floor keeps a near-zero denominator from
-    # inflating a trivial delta: a player not worth a roster spot is not worth a
-    # reserved one either.
+    # Role qualification. The delta from the regular curve is normalized by the
+    # role value's magnitude, which strips out player quality -- an absolute
+    # gain measures how good someone is rather than how role-shaped they are.
+    # Thresholds differ because the two windows do: a full short-window absence
+    # tops out near the window mass (~0.28), while a stream lean runs up toward
+    # 1 - stream window mass (~0.81). The floor keeps a near-zero denominator
+    # from inflating a trivial delta.
     stash_ratio_threshold: float = 0.25
+    stream_ratio_threshold: float = 0.40
     role_value_floor: float = 1.0
 
     @property

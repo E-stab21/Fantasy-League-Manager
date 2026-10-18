@@ -124,12 +124,10 @@ has its own week curve (`leverage.role_weights`):
 
 Two separate questions decide who holds a slot:
 
-- **Does a player qualify?** The stash and stream tests differ, deliberately.
-
-  **Stash** uses a *normalized* delta (`roster_roles.stash_ratio`):
-  `(stash − regular) / |stash|`, which must clear `stash_ratio_threshold`
-  (default **0.25**), and the stash value must clear `role_value_floor`
-  (default **1.0**).
+- **Does a player qualify?** Both roles are tested the same way: a *normalized*
+  delta (`roster_roles.role_ratio`) `(role − regular) / |role|` clearing that
+  role's threshold — `stash_ratio_threshold` **0.25**, `stream_ratio_threshold`
+  **0.40** — and a role value clearing `role_value_floor` (default **1.0**).
 
   The normalization is the whole point. For a player simply absent across the
   short window the ratio comes out as **the base weight of the weeks missed**,
@@ -150,13 +148,23 @@ Two separate questions decide who holds a slot:
   does not deserve a reserved one. A sub-replacement player whose return is
   weak lands negative and is excluded by design (Pittman, −0.278).
 
-  **Stream** still uses the absolute gain against `role_gain_threshold`
-  (default 0.5), with no value floor. **Known asymmetry**: that leaves the
-  stream side with both problems the stash side just fixed — it is
-  magnitude-driven, and four below-replacement players on the live roster are
-  stream-eligible, two of them with a *negative* stream value (Kamara −0.60,
-  Bates −0.86). Ranking by role value currently masks it, since a positive
-  player wins the slot, but the qualification itself is wrong.
+  **Stream** reads the same way with its own ceiling. A player who plays *only*
+  the stream window puts all of his worth there, so the ratio comes out at
+  exactly `1 − (stream window mass)` = **0.815** here, again whatever he is
+  worth. Measured shapes below it: declining 20→11 **0.725**, four good weeks
+  **0.630**, declining 20→14 **0.484**, six good weeks **0.444**, flat
+  **0.000**. The threshold sweep over the live player pool: 0.30 → 2 qualify,
+  **0.40 → 2** (Stafford 0.440, Rodgers 1.211), 0.45 → 1, 0.50 → 1. So 0.40 is
+  the loosest cut that still rejects a six-week lean.
+
+  The ratio **runs past that ceiling when the regular value is negative** —
+  Rachaad White, worth −3.63 over the season and +0.12 for two weeks, reads
+  **+30.07**. That is honest ("more than all of my worth sits in the window")
+  and harmless, because the value floor is what decides the slot: only **9 of
+  97** players clear 1.0 on the stream curve. Before the floor, four
+  below-replacement players were stream-eligible, two with a *negative* stream
+  value (Kamara −0.60, Bates −0.86) — eligible for a reserved bench slot while
+  being worth less than the waiver wire.
 - **Who gets the slot?** The highest **value** in that role — not the biggest
   gain, and not whoever was there first. The slot exists to be used well, so a
   third qualifier worth more in the role displaces the weakest incumbent. A
@@ -169,9 +177,11 @@ season. It consumes stream capacity like any other tenant, so only one other
 streamer can be held alongside it.
 
 Qualification is about the **shape** of a curve: back-loaded gains under `stash`,
-front-loaded under `stream`. On the live roster at a 0.5 threshold only two
-players qualify; at an epsilon threshold four did, including a 0.37 lean that is
-really just depth.
+front-loaded under `stream`. Normalizing is what isolates that shape from
+quality, and the value floor is what keeps a shape nobody wants out of a slot.
+On the live roster exactly one player qualifies on merit (Stafford, stream),
+alongside the unconditional D/ST; the stash slots sit empty, which is the
+correct answer for a roster with no worthwhile injury stash.
 
 **A role curve is a yardstick for a head-to-head, not a discount on what a
 player is worth to own.** `roster_totals` deliberately scores everyone on the

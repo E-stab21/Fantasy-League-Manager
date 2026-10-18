@@ -1,7 +1,13 @@
-from league_manager.leverage import ROLE_REGULAR, ROLE_STASH, ROLE_STREAM, week_weights
+from league_manager.leverage import (
+    ROLE_REGULAR,
+    ROLE_STASH,
+    ROLE_STREAM,
+    STREAM_WEEKS,
+    week_weights,
+)
 from league_manager.roster_roles import (
     RoleScorer,
-    stash_ratio,
+    role_ratio,
     assign_roles,
     choose_forced_drops,
     marginal_arrival,
@@ -97,7 +103,7 @@ def test_roster_totals_do_not_reweight_a_player_by_their_slot():
     # must not lose its rest-of-season value.
     ctx = _ctx()
     weeks = ctx.remaining_weeks
-    asset = _bench(1, "Season Long", "WR", {week: 15.0 for week in weeks[:2]} | {week: 14.0 for week in weeks[2:]})
+    asset = _bench(1, "Season Long", "WR", {week: 26.0 for week in weeks[:2]} | {week: 14.0 for week in weeks[2:]})
     scorer = _scorer(ctx, {"WR": 8.0})
     roles = assign_roles([asset], scorer=scorer)
     assert roles[1] == ROLE_STREAM  # front-loaded enough to take the slot
@@ -317,7 +323,7 @@ def test_two_defenses_consume_the_whole_stream_allowance():
     assert roles[3] == ROLE_REGULAR  # no stream capacity left for a real streamer
 
 
-def test_stash_ratio_equals_the_weight_missed_and_ignores_quality():
+def test_role_ratio_stash_equals_the_weight_missed_and_ignores_quality():
     # The whole point of normalizing: a player simply absent across the window
     # lands on the window mass whatever they are worth, so a stud missing one
     # bye week can no longer outrank a mid player out for the whole window.
@@ -333,7 +339,7 @@ def test_stash_ratio_equals_the_weight_missed_and_ignores_quality():
         player = _bench(pid, f"p{pid}", "WR", curve)
         reg = scorer.value(player, ROLE_REGULAR)
         stash = scorer.value(player, ROLE_STASH)
-        return stash_ratio(reg, stash)
+        return role_ratio(reg, stash)
 
     # Same absence, wildly different quality -> same ratio.
     mid = ratio_for(1, 12.0, window)
@@ -349,7 +355,7 @@ def test_stash_ratio_equals_the_weight_missed_and_ignores_quality():
     assert round(four, 6) == round(mass, 6)
 
 
-def test_stash_ratio_keeps_the_sign_honest_for_a_declining_player():
+def test_role_ratio_keeps_the_sign_honest_for_a_declining_player():
     # Both values negative: an unsigned divide would read a decline as stash
     # shape. Dividing by |stash| keeps it negative.
     ctx = _ctx()
@@ -361,7 +367,7 @@ def test_stash_ratio_keeps_the_sign_honest_for_a_declining_player():
     reg = scorer.value(declining, ROLE_REGULAR)
     stash = scorer.value(declining, ROLE_STASH)
     assert reg < 0 and stash < 0
-    assert stash_ratio(reg, stash) < 0
+    assert role_ratio(reg, stash) < 0
     # Not a stash. Front-loaded is the stream shape, and that is what it gets.
     assert assign_roles([declining], scorer=scorer)[1] != ROLE_STASH
 
@@ -376,10 +382,71 @@ def test_value_floor_blocks_a_big_ratio_on_a_worthless_player():
     barely = _bench(1, "Barely Rosterable", "WR", {w: 8.3 for w in weeks if w not in window})
     reg = scorer.value(barely, ROLE_REGULAR)
     stash = scorer.value(barely, ROLE_STASH)
-    assert stash_ratio(reg, stash) >= 0.25  # clears the ratio
+    assert role_ratio(reg, stash) >= 0.25  # clears the ratio
     assert stash < 1.0  # but not worth a spot
     assert assign_roles([barely], scorer=scorer)[1] == ROLE_REGULAR
 
     worthwhile = _bench(2, "Worth Holding", "WR", {w: 14.0 for w in weeks if w not in window})
     assert scorer.value(worthwhile, ROLE_STASH) >= 1.0
     assert assign_roles([worthwhile], scorer=scorer)[2] == ROLE_STASH
+
+
+def test_role_ratio_stream_tops_out_at_the_weight_outside_the_window():
+    # A player who only plays the stream window puts all of his worth there, so
+    # the ratio is exactly the weight of everything the window is not. Like the
+    # stash side it is quality-blind: same shape, same ratio.
+    ctx = _ctx()
+    weeks = ctx.remaining_weeks
+    window = set(weeks[:STREAM_WEEKS])
+    ceiling = 1.0 - week_weights(ctx).mass(window)
+
+    def ratio_for(pid, points, played):
+        scorer = _scorer(ctx, {"WR": 8.0})
+        player = _bench(pid, f"p{pid}", "WR", {w: points for w in played})
+        reg = scorer.value(player, ROLE_REGULAR)
+        return role_ratio(reg, scorer.value(player, ROLE_STREAM))
+
+    spike = ratio_for(1, 20.0, window)
+    big_spike = ratio_for(2, 34.0, window)
+    assert round(spike, 6) == round(big_spike, 6) == round(ceiling, 6)
+
+    # Playing on past the window pulls the ratio down from the ceiling.
+    longer = ratio_for(3, 20.0, set(weeks[:STREAM_WEEKS + 3]))
+    assert longer < spike
+    # A flat player leans nowhere.
+    assert abs(ratio_for(4, 20.0, set(weeks))) < 1e-9
+
+
+def test_role_ratio_stream_runs_past_the_ceiling_when_the_season_is_negative():
+    # Worth less than replacement over the season but useful for two weeks:
+    # more than all of his worth sits in the window, so the ratio exceeds the
+    # ceiling. That is honest, and harmless -- slots rank by role value.
+    ctx = _ctx()
+    weeks = ctx.remaining_weeks
+    scorer = _scorer(ctx, {"WR": 12.0})
+    spike = _bench(1, "Two Good Weeks", "WR", {w: (20.0 if w in set(weeks[:STREAM_WEEKS]) else 10.0) for w in weeks})
+    reg = scorer.value(spike, ROLE_REGULAR)
+    stream = scorer.value(spike, ROLE_STREAM)
+    assert reg < 0 < stream
+    assert role_ratio(reg, stream) > 1.0 - week_weights(ctx).mass(set(weeks[:STREAM_WEEKS]))
+    assert assign_roles([spike], scorer=scorer)[1] == ROLE_STREAM
+
+
+def test_value_floor_blocks_a_stream_ratio_on_a_worthless_player():
+    # The stream ratio hits its ceiling for anyone who only plays the window,
+    # however little they are worth there. The floor is what keeps a waiver-wire
+    # body out of a reserved slot.
+    ctx = _ctx()
+    weeks = ctx.remaining_weeks
+    window = set(weeks[:STREAM_WEEKS])
+    scorer = _scorer(ctx, {"WR": 8.0})
+    barely = _bench(1, "Barely Startable", "WR", {w: 8.3 for w in window})
+    reg = scorer.value(barely, ROLE_REGULAR)
+    stream = scorer.value(barely, ROLE_STREAM)
+    assert role_ratio(reg, stream) >= 0.40  # clears the ratio
+    assert stream < 1.0  # but not worth a spot
+    assert assign_roles([barely], scorer=scorer)[1] == ROLE_REGULAR
+
+    worthwhile = _bench(2, "Worth Starting", "WR", {w: 14.0 for w in window})
+    assert scorer.value(worthwhile, ROLE_STREAM) >= 1.0
+    assert assign_roles([worthwhile], scorer=scorer)[2] == ROLE_STREAM
