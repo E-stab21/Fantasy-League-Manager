@@ -118,6 +118,23 @@ players are routinely still projected to play. Both sides of the reported delta
 must be scored the same way, or `current_projected` and `recommended_projected`
 are not comparable.
 
+**An unfilled starting slot is a silent failure**, so `lineup-advice` reports
+`alerts` (`advise.lineup_gap_alerts`). It happened live: the only kicker was on
+bye, the K slot went unfilled, and the lineup total looked like any other week —
+nothing in the output said so. Two kinds, both on this week's projection:
+
+- `empty` — no rostered player fits the slot and is playing, so it scores 0. A
+  *filled* slot can never project 0, because a player the sources leave out of
+  the week is not a candidate at all, so 0 and empty are the same thing.
+- `weak` — the slotted player projects under the replacement rate for his own
+  position (the 3rd-best free agent), so the wire can beat your starter.
+
+Each alert carries `best_available`: the top free agent who fits the slot and is
+playing, consumed most restrictive first so one free agent is not offered as the
+answer to two different holes. `free_agents` / `baselines` are optional on
+`optimal_lineup` — without them `empty` still fires, it just cannot name a
+replacement.
+
 Known gap: Sleeper keys defenses by team abbreviation, not the numeric id the
 matcher uses, so D/ST gets no per-week curve and falls back to a flat rate.
 

@@ -58,6 +58,7 @@ Only add `--confirm` after showing the preview and getting a clear go-ahead.
 - Buy-low / sell-high compares the last few *actual* games to the weekly projection other managers saw. Recency is the market signal, not a second projection.
 - Do not train a weekly point model. Do not scrape FantasyPros HTML.
 - **Do not sit a player on the injury tag.** ESPN's `injury_status` goes stale — players tagged `INJURY_RESERVE` are routinely still projected at full strength every week. Availability comes from **this week's per-week projection**: no number published for the week means not playing, and a published `0` is a bye. Injury is already priced into the projections; do not discount it a second time.
+- **Read `alerts` on every `lineup-advice` run and report them.** `empty` means a starting slot nobody covers — it scores 0 and the lineup total hides it, which is how a kicker on bye with no backup went unnoticed. `weak` means the starter projects under the replacement rate at his position. Each one names the best free agent who fits.
 - **Before recommending any drop, check IR eligibility.** `waiver-advice` surfaces it as `ir_stash_alerts` and a per-target `drop_ir_eligible` flag. Prefer `set-lineup --move ID:BE:IR` over dropping an IR-eligible player — it frees the spot at zero cost and keeps the player. Drop one only if the IR slot is already full.
 - Explain the recommendation in plain language: who to start, who to sit, who to claim, and why.
 - Never print `espn_s2` or `SWID` values.

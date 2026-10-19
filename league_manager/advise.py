@@ -9,6 +9,7 @@ from league_manager.slots import (
     BENCH_SLOT,
     IR_SLOT,
     is_starter_slot,
+    normalize_position,
     slot_eligibility_size,
     parse_slot,
     player_fits_slot,
@@ -35,6 +36,102 @@ def _slot_id(player: dict[str, Any]) -> int | None:
     return int(raw) if raw is not None else None
 
 
+def lineup_gap_alerts(
+    slot_fills: list[tuple[int, dict[str, Any] | None]],
+    *,
+    context: LeagueContext,
+    score: Any,
+    free_agents: list[dict[str, Any]] | None = None,
+    baselines: dict[str, float] | None = None,
+) -> list[dict[str, Any]]:
+    """Starting slots nobody covers, or covered by someone projected low.
+
+    A slot going unfilled is the quiet failure this exists for: the lineup just
+    scores 0 there and the total looks like any other week. It happened live --
+    a kicker on bye with no backup left the K slot empty, and nothing said so.
+
+    Two kinds, both measured on this week's projection:
+
+    - `empty`: no rostered player fits the slot and is playing. A filled slot
+      can never project 0, because a player the sources leave out of this week
+      is not a candidate in the first place, so 0 and empty are the same thing.
+    - `weak`: the slotted player projects below the replacement rate for the
+      position -- the 3rd-best free agent -- so the wire can beat your starter.
+
+    Either way the alert carries `best_available`: the top free agent who fits
+    the slot and is playing, so it names the fix and not just the problem. Those
+    are consumed most restrictive first, like the lineup fill, so one free agent
+    is not offered as the answer to two different holes.
+    """
+    alerts: list[dict[str, Any]] = []
+    fa_pool = [player for player in (free_agents or []) if score(player) > 0]
+    taken: set[Any] = set()
+
+    def _best_fa(slot: int) -> dict[str, Any] | None:
+        fits = [
+            player
+            for player in fa_pool
+            if player.get("id") not in taken
+            and player_fits_slot(str(player.get("position") or ""), slot)
+        ]
+        if not fits:
+            return None
+        return max(fits, key=score)
+
+    for slot, pick in slot_fills:
+        position = normalize_position(str((pick or {}).get("position") or ""))
+        projection = score(pick) if pick else 0.0
+        replacement = (baselines or {}).get(position) if pick else None
+        if pick is not None and (replacement is None or projection >= replacement):
+            continue
+        kind = "empty" if pick is None else "weak"
+        candidate = _best_fa(slot)
+        if candidate is not None and (pick is None or score(candidate) > projection):
+            taken.add(candidate.get("id"))
+            best = {
+                "id": candidate.get("id"),
+                "name": candidate.get("name"),
+                "position": candidate.get("position"),
+                "pro_team": candidate.get("pro_team"),
+                "projection": round(score(candidate), 2),
+            }
+        else:
+            best = None
+        if pick is None:
+            why = (
+                f"No rostered player fits {slot_name(slot)} and is playing in week "
+                f"{int(context.current_week)} -- the slot scores 0."
+            )
+        else:
+            why = (
+                f"{pick.get('name')} projects {projection:.1f} in {slot_name(slot)}, "
+                f"under the {position} replacement rate of {replacement:.1f}."
+            )
+        if best:
+            why += f" Best free agent who fits: {best['name']} ({best['projection']:.1f})."
+        alerts.append(
+            {
+                "kind": kind,
+                "slot": slot_name(slot),
+                "slot_id": slot,
+                "player": None
+                if pick is None
+                else {
+                    "id": pick.get("id"),
+                    "name": pick.get("name"),
+                    "position": pick.get("position"),
+                    "projection": round(projection, 2),
+                },
+                "replacement_weekly": None if replacement is None else round(replacement, 2),
+                "best_available": best,
+                "why": why,
+            }
+        )
+    # An uncovered slot is worth more than a merely weak one.
+    alerts.sort(key=lambda row: (row["kind"] != "empty", row["slot"]))
+    return alerts
+
+
 def _sit_reason(player: dict[str, Any], *, playing: bool = True) -> str:
     if not playing:
         # A bye carries no injury status at all, so this has to come first.
@@ -54,6 +151,8 @@ def optimal_lineup(
     roster: list[dict[str, Any]],
     *,
     context: LeagueContext,
+    free_agents: list[dict[str, Any]] | None = None,
+    baselines: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Fill each starting slot with the highest remaining eligible projection.
 
@@ -64,6 +163,10 @@ def optimal_lineup(
     `injured` flag: the flag goes stale, and players carrying it are routinely
     still projected to play. A player the sources leave out of this week, or
     discount to nothing, is not a candidate.
+
+    `free_agents` and `baselines` are optional and only feed `alerts`
+    (`lineup_gap_alerts`). Without them an uncovered slot is still reported --
+    that check needs nothing extra -- it just cannot name a replacement.
     """
     starter_slots = sorted(
         (
@@ -88,8 +191,25 @@ def optimal_lineup(
 
     def _score(player: dict[str, Any]) -> float:
         return this_week.get(player.get("id"), 0.0)
+
+    def _score_any(player: dict[str, Any]) -> float:
+        """Same this-week number, for a player who was never on the roster.
+
+        `this_week` only holds rostered players, so a free agent has to have its
+        curve built here -- scored identically, or the comparison in the alerts
+        would not mean anything.
+        """
+        pid = player.get("id")
+        if pid in this_week:
+            return this_week[pid]
+        curve, _ = weekly_projection_curve(player, context)
+        return curve.get(week) or 0.0
+
     assigned: set[Any] = set()
     recommended: list[dict[str, Any]] = []
+    # Kept per slot instance, unfilled ones included, so the gap alerts below can
+    # see a slot nobody covered. `recommended` only carries the slots that filled.
+    slot_fills: list[tuple[int, dict[str, Any] | None]] = []
     for slot in starter_slots:
         candidates = [
             player
@@ -99,9 +219,11 @@ def optimal_lineup(
         ]
         candidates.sort(key=_score, reverse=True)
         if not candidates:
+            slot_fills.append((slot, None))
             continue
         pick = candidates[0]
         assigned.add(pick.get("id"))
+        slot_fills.append((slot, pick))
         recommended.append(
             {
                 **pick,
@@ -181,6 +303,24 @@ def optimal_lineup(
     # current starter who is not playing this week scores 0, which is the point.
     current_total = sum(_score(player) for player in current_starters)
     recommended_total = sum(float(item["projection"]) for item in recommended)
+    alerts = lineup_gap_alerts(
+        slot_fills,
+        context=context,
+        score=_score_any,
+        free_agents=free_agents,
+        baselines=baselines,
+    )
+    notes = [
+        "Averages ESPN and Sleeper this-week projections when both exist.",
+        "Injured players are excluded from the recommended lineup.",
+        "This is a greedy slot fill, not a trained model.",
+    ]
+    if alerts:
+        empty = sum(1 for row in alerts if row["kind"] == "empty")
+        weak = len(alerts) - empty
+        notes.append(
+            f"Lineup gaps: {empty} slot(s) nobody covers, {weak} below replacement."
+        )
     return {
         "current_projected": round(current_total, 2),
         "recommended_projected": round(recommended_total, 2),
@@ -189,11 +329,8 @@ def optimal_lineup(
         "sit": sit,
         "recommended": recommended,
         "moves": moves,
-        "notes": [
-            "Averages ESPN and Sleeper this-week projections when both exist.",
-            "Injured players are excluded from the recommended lineup.",
-            "This is a greedy slot fill, not a trained model.",
-        ],
+        "alerts": alerts,
+        "notes": notes,
     }
 
 

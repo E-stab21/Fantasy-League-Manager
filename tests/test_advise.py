@@ -430,3 +430,151 @@ def test_bye_week_player_is_not_started_or_blamed_on_a_projection():
     sat = {row["id"]: row for row in advice["sit"]}
     assert sat[1]["projection"] == 0.0
     assert "not playing" in sat[1]["reason"]
+
+
+def test_kicker_on_bye_with_no_backup_raises_an_empty_slot_alert():
+    # The live miss this exists for: the only kicker was on bye, the K slot went
+    # unfilled, and the lineup total looked like any other week.
+    ctx = _lineup_ctx()
+    week = ctx.current_week
+    roster = [
+        {
+            "id": 1, "name": "Bye Kicker", "position": "K", "lineup_slot": "K",
+            "lineup_slot_id": 17, "projected_points": 8.9,
+            "projected_avg_points": 8.9,
+            "weekly_stats": {str(week): {"projected_points": 0.0}},
+        },
+        {
+            "id": 2, "name": "WR1", "position": "WR", "lineup_slot": "WR",
+            "lineup_slot_id": 4,
+            "weekly_stats": {str(week): {"projected_points": 14.0}},
+        },
+    ]
+    free_agents = [
+        {
+            "id": 9, "name": "Streamer K", "position": "K", "pro_team": "WSH",
+            "weekly_stats": {str(week): {"projected_points": 7.5}},
+        },
+    ]
+    advice = optimal_lineup(
+        roster, context=ctx, free_agents=free_agents, baselines={"K": 10.7, "WR": 9.0}
+    )
+    # Nobody covers K, so it is absent from the lineup entirely.
+    assert not any(p["recommended_slot"] == "K" for p in advice["recommended"])
+    empty = [row for row in advice["alerts"] if row["kind"] == "empty"]
+    assert len(empty) == 1
+    assert empty[0]["slot"] == "K"
+    assert empty[0]["player"] is None
+    assert empty[0]["best_available"]["name"] == "Streamer K"
+    assert "scores 0" in empty[0]["why"]
+
+
+def test_an_empty_slot_is_reported_without_a_free_agent_pool():
+    # The check that needs nothing extra must still fire; it just cannot name
+    # a replacement.
+    ctx = _lineup_ctx()
+    week = ctx.current_week
+    roster = [
+        {
+            "id": 1, "name": "Bye Kicker", "position": "K", "lineup_slot": "K",
+            "lineup_slot_id": 17, "projected_avg_points": 8.9,
+            "weekly_stats": {str(week): {"projected_points": 0.0}},
+        },
+    ]
+    advice = optimal_lineup(roster, context=ctx)
+    assert [row["kind"] for row in advice["alerts"]] == ["empty"]
+    assert advice["alerts"][0]["best_available"] is None
+
+
+def test_a_starter_under_the_replacement_rate_is_flagged_weak():
+    ctx = _lineup_ctx()
+    week = ctx.current_week
+    roster = [
+        {
+            "id": 1, "name": "Fading RB", "position": "RB", "lineup_slot": "RB",
+            "lineup_slot_id": 2,
+            "weekly_stats": {str(week): {"projected_points": 7.0}},
+        },
+        {
+            "id": 2, "name": "Fine WR", "position": "WR", "lineup_slot": "WR",
+            "lineup_slot_id": 4,
+            "weekly_stats": {str(week): {"projected_points": 14.0}},
+        },
+    ]
+    free_agents = [
+        {
+            "id": 9, "name": "Hot Hand", "position": "RB", "pro_team": "ARI",
+            "weekly_stats": {str(week): {"projected_points": 12.5}},
+        },
+    ]
+    advice = optimal_lineup(
+        roster, context=ctx, free_agents=free_agents, baselines={"RB": 10.5, "WR": 9.0}
+    )
+    kinds = {row["slot"]: row for row in advice["alerts"]}
+    assert set(kinds) == {"RB"}  # the WR clears his own replacement rate
+    assert kinds["RB"]["kind"] == "weak"
+    assert kinds["RB"]["player"]["projection"] == 7.0
+    assert kinds["RB"]["replacement_weekly"] == 10.5
+    assert kinds["RB"]["best_available"]["name"] == "Hot Hand"
+
+
+def test_one_free_agent_is_not_offered_for_two_holes():
+    ctx = _lineup_ctx()
+    week = ctx.current_week
+    roster = [
+        {
+            "id": 1, "name": "Weak RB", "position": "RB", "lineup_slot": "RB",
+            "lineup_slot_id": 2,
+            "weekly_stats": {str(week): {"projected_points": 6.0}},
+        },
+        {
+            "id": 2, "name": "Weak RB Two", "position": "RB", "lineup_slot": "RB",
+            "lineup_slot_id": 2,
+            "weekly_stats": {str(week): {"projected_points": 6.5}},
+        },
+    ]
+    free_agents = [
+        {
+            "id": 9, "name": "Best FA", "position": "RB", "pro_team": "ARI",
+            "weekly_stats": {str(week): {"projected_points": 13.0}},
+        },
+        {
+            "id": 10, "name": "Next FA", "position": "RB", "pro_team": "LV",
+            "weekly_stats": {str(week): {"projected_points": 11.0}},
+        },
+    ]
+    advice = optimal_lineup(
+        roster, context=ctx, free_agents=free_agents, baselines={"RB": 10.5}
+    )
+    suggested = [row["best_available"]["name"] for row in advice["alerts"]]
+    assert sorted(suggested) == ["Best FA", "Next FA"]
+
+
+def test_a_free_agent_not_playing_this_week_is_never_suggested():
+    ctx = _lineup_ctx()
+    week = ctx.current_week
+    weeks = ctx.remaining_weeks
+    roster = [
+        {
+            "id": 1, "name": "Weak RB", "position": "RB", "lineup_slot": "RB",
+            "lineup_slot_id": 2,
+            "weekly_stats": {str(week): {"projected_points": 6.0}},
+        },
+    ]
+    free_agents = [
+        {
+            "id": 9, "name": "On Bye FA", "position": "RB", "pro_team": "ARI",
+            # Published zero for this week: a bye, not a gap.
+            "weekly_stats": {str(week): {"projected_points": 0.0}},
+            "projected_avg_points": 15.0,
+        },
+        {
+            "id": 10, "name": "Out For Weeks", "position": "RB", "pro_team": "LV",
+            # The source omits this week entirely.
+            "weekly_projections": {w: 14.0 for w in weeks[3:]},
+        },
+    ]
+    advice = optimal_lineup(
+        roster, context=ctx, free_agents=free_agents, baselines={"RB": 10.5}
+    )
+    assert advice["alerts"][0]["best_available"] is None

@@ -369,7 +369,20 @@ class EspnClient:
             season_end_week=context.season_end_week,
             sleeper=sleeper,
         )
-        advice = optimal_lineup(players, context=context)
+        # Only feeds the gap alerts: an uncovered or below-replacement slot is
+        # worth little without naming who could fill it.
+        free_agents = self._enrich_players(
+            self.free_agents(size=REPLACEMENT_FA_POOL),
+            current_week=context.current_week,
+            season_end_week=context.season_end_week,
+            sleeper=sleeper,
+        )
+        advice = optimal_lineup(
+            players,
+            context=context,
+            free_agents=free_agents,
+            baselines=replacement_baselines(free_agents),
+        )
         advice["team"] = {"id": payload.get("id"), "name": payload.get("name")}
         advice["week"] = context.current_week
         advice["sources"] = {
