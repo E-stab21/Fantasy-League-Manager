@@ -98,6 +98,8 @@ def test_search_keeps_a_lopsided_espn_face_and_only_reports_it():
         baselines={"RB": 8.0, "WR": 8.0},
         window="bubble",
         kinds=("1:1",),
+        # Explicit, so this stays about face and not about the band ceiling.
+        max_surplus=40.0,
     )
     # A streamer for their WR1 is never getting accepted, and that is the
     # manager's read to make. Nothing filters on face any more, so the package

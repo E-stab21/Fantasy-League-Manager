@@ -45,13 +45,18 @@ BAND_PATH = DEFAULT_CACHE / "trade_band.json"
 
 # Built-in realism band.
 #
-# Surplus and their-ROS limits are in points per weighted game above
-# replacement (see leverage.week_weights), measured against the spread of real
-# 1:1 packages in this league: blended runs about -15..+16 with a median near
-# zero, and their-ROS net about -14..+13. ESPN face value is untouched by that
-# weighting and stays on its raw season-points scale.
+# Surplus is in points per weighted game above replacement (see
+# leverage.week_weights), measured against the spread of real 1:1 packages in
+# this league: blended runs about -15..+16 with a median near zero.
+#
+# The top edge is the only realism lever left, now that nothing filters on what
+# a package looks like to the other manager, so it carries the weight the face
+# band used to. At 12 the search was dominated by packages that are correct on
+# our own value and obviously unsendable -- one player for two, our backup QB
+# for their RB1 plus their starting QB. A ceiling near a quarter of the scale
+# keeps the output to deals a manager might actually look at twice.
 DEFAULT_MIN_SURPLUS = 1.0
-DEFAULT_MAX_SURPLUS = 12.0
+DEFAULT_MAX_SURPLUS = 5.0
 
 
 @dataclass(frozen=True)

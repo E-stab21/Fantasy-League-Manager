@@ -113,12 +113,13 @@ def _package_score(blended: float) -> float:
     their-ROS are still reported on every row; deciding what the other manager
     will take is the manager's call, not the ranker's.
 
-    Above the band's top edge the curve flattens so a single absurd smash does
-    not crowd out a page of realistic packages.
+    It is monotonic in `blended` and nothing else, so the returned list reads in
+    plain descending order of what a package is worth to us. The old curve
+    flattened above 12 to stop one absurd smash crowding out realistic
+    packages; `max_surplus` is what holds that line now, and it sits well below
+    where the old knee was.
     """
-    if blended <= 12.0:
-        return blended * 1.95
-    return 23.4 - (blended - 12.0) * 0.25
+    return blended
 
 
 def _why(
