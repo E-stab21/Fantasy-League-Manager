@@ -7,6 +7,8 @@ would corrupt valuations.
 
 from __future__ import annotations
 
+import math
+
 import json
 import os
 import random
@@ -41,13 +43,20 @@ SKIP_POS = {"K", "DEF", "DL", "LB", "DB", "IDP"}
 DEFAULT_CACHE = Path(os.getenv("XDG_CACHE_HOME", Path.home() / ".cache")) / "league-manager"
 BAND_PATH = DEFAULT_CACHE / "trade_band.json"
 
-# Built-in realism band (raised from early Sleeper accept samples).
+# Built-in realism band.
+#
+# Surplus is in points per weighted game above replacement (see
+# leverage.week_weights), measured against the spread of real 1:1 packages in
+# this league: blended runs about -15..+16 with a median near zero.
+#
+# The top edge is the only realism lever left, now that nothing filters on what
+# a package looks like to the other manager, so it carries the weight the face
+# band used to. At 12 the search was dominated by packages that are correct on
+# our own value and obviously unsendable -- one player for two, our backup QB
+# for their RB1 plus their starting QB. A ceiling near a quarter of the scale
+# keeps the output to deals a manager might actually look at twice.
 DEFAULT_MIN_SURPLUS = 1.0
-DEFAULT_MAX_SURPLUS = 40.0
-DEFAULT_MIN_THEIR_FACE = -55.0
-DEFAULT_MAX_THEIR_FACE = 15.0
-DEFAULT_MIN_THEIR_LT = -80.0
-DEFAULT_MAX_THEIR_LT = 25.0
+DEFAULT_MAX_SURPLUS = 5.0
 
 
 @dataclass(frozen=True)
@@ -62,12 +71,19 @@ class LeagueProfile:
 
 @dataclass(frozen=True)
 class Band:
+    """Realism bounds for a trade search. Blend only, deliberately.
+
+    What a package is worth to the other manager -- ESPN face points, or their
+    ROS VORP under our own numbers -- is reported for context but never filters
+    or ranks. It is their read to make, not ours to guess: face is in raw
+    season points on a ~350-point base and cannot see a bye or a positional
+    need, so filtering on it threw out good packages (every trade sending our
+    best WR) while promoting bad ones (a third QB to a team already carrying
+    two).
+    """
+
     min_surplus: float = DEFAULT_MIN_SURPLUS
     max_surplus: float = DEFAULT_MAX_SURPLUS
-    min_their_face: float = DEFAULT_MIN_THEIR_FACE
-    max_their_face: float = DEFAULT_MAX_THEIR_FACE
-    min_their_lt: float = DEFAULT_MIN_THEIR_LT
-    max_their_lt: float = DEFAULT_MAX_THEIR_LT
 
     def as_dict(self) -> dict[str, float]:
         return asdict(self)
@@ -101,10 +117,6 @@ def active_band(path: Path | None = None) -> Band:
     return Band(
         min_surplus=float(override.get("min_surplus", base.min_surplus)),
         max_surplus=float(override.get("max_surplus", base.max_surplus)),
-        min_their_face=float(override.get("min_their_face", base.min_their_face)),
-        max_their_face=float(override.get("max_their_face", base.max_their_face)),
-        min_their_lt=float(override.get("min_their_lt", base.min_their_lt)),
-        max_their_lt=float(override.get("max_their_lt", base.max_their_lt)),
     )
 
 
@@ -363,11 +375,7 @@ def grade_accepted_side(
         _face_value(p, games) for p in recv_players
     )
     their_lt_net = sum(v.lt_vorp for v in send_values) - sum(v.lt_vorp for v in recv_values)
-    would_keep = (
-        band.min_surplus <= grade["blended"] <= band.max_surplus
-        and band.min_their_face <= their_face_net <= band.max_their_face
-        and band.min_their_lt <= their_lt_net <= band.max_their_lt
-    )
+    would_keep = band.min_surplus <= grade["blended"] <= band.max_surplus
     lineup = grade.get("lineup") or {}
     return {
         "send": [p["name"] for p in send_players],
@@ -398,20 +406,15 @@ def _percentile(vals: list[float], p: float) -> float:
 
 
 def _round_up_5(value: float) -> float:
+    """Round up to a whole point. Steps of 5 were far too coarse once values
+    moved to a per-weighted-game scale that only spans about +/-16."""
     if value <= 0:
         return 0.0
-    return float(5 * int((value + 4.999) // 5))
-
-
-def _round_down_5(value: float) -> float:
-    if value >= 0:
-        return float(5 * int(value // 5))
-    # more negative floor toward -inf in steps of 5
-    return float(-5 * int((-value + 4.999) // 5))
+    return float(math.ceil(value - 1e-9))
 
 
 def recommend_band(win_sides: list[dict[str, Any]], current: Band, *, min_sample: int = 8) -> dict[str, Any]:
-    """Raise the top edge / loosen give-up floors when accepts say we are too tight."""
+    """Raise the top edge when accepts say we are too tight on our own surplus."""
     blends = [float(g["blended"]) for g in win_sides]
     faces = [float(g["their_espn_face_net"]) for g in win_sides]
     lts = [float(g["their_ros_vorp_net"]) for g in win_sides]
@@ -436,20 +439,15 @@ def recommend_band(win_sides: list[dict[str, Any]], current: Band, *, min_sample
     # (huge dynasty-like smash in a thin sample) cannot open the floodgates.
     raw_top = _round_up_5(blend_p75)
     suggested_max = max(current.max_surplus, raw_top)
-    suggested_max = min(suggested_max, current.max_surplus + 20.0)
+    suggested_max = min(suggested_max, current.max_surplus + 4.0)
     suggested_max = min(suggested_max, max(current.max_surplus, _round_up_5(blend_p90)))
 
-    # Floors: allow them to give up what the market gave up, but not unbounded.
-    suggested_min_face = min(current.min_their_face, max(_round_down_5(face_p10), -120.0))
-    suggested_min_lt = min(current.min_their_lt, max(_round_down_5(lt_p10), -150.0))
-
+    # Face and their-ROS percentiles are still measured and reported below, as a
+    # read on what the market actually tolerated, but they no longer bound the
+    # band -- nothing filters on them.
     recommended = Band(
         min_surplus=current.min_surplus,
         max_surplus=suggested_max,
-        min_their_face=suggested_min_face,
-        max_their_face=current.max_their_face,
-        min_their_lt=suggested_min_lt,
-        max_their_lt=current.max_their_lt,
     )
     changed = recommended != current
     reason = (

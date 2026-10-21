@@ -47,7 +47,7 @@ def test_rejects_dynasty_and_superflex_mismatch():
 
 
 def test_recommend_band_raises_top_when_accepts_are_fatter(tmp_path: Path):
-    current = Band(max_surplus=20.0, min_their_face=-20.0, min_their_lt=-30.0)
+    current = Band(max_surplus=20.0)
     win_sides = [
         {"blended": 12.0, "their_espn_face_net": -10.0, "their_ros_vorp_net": -15.0},
         {"blended": 18.0, "their_espn_face_net": -25.0, "their_ros_vorp_net": -40.0},
@@ -60,14 +60,16 @@ def test_recommend_band_raises_top_when_accepts_are_fatter(tmp_path: Path):
     ]
     rec = recommend_band(win_sides, current, min_sample=8)
     assert rec["changed"] is True
-    # One-step cap: +20 from current, even if p75 is higher.
-    assert rec["recommended"]["max_surplus"] == 40.0
-    assert rec["recommended"]["min_their_face"] <= current.min_their_face
+    # One-step cap: +4 from current, even if p75 is higher.
+    assert rec["recommended"]["max_surplus"] == 24.0
+    # Face and their-ROS are measured for context but are not band bounds.
+    assert set(rec["recommended"]) == {"min_surplus", "max_surplus"}
+    assert rec["stats"]["their_face_p10"] < 0
 
     path = tmp_path / "band.json"
     save_band(Band(**{k: rec["recommended"][k] for k in Band().__dict__}), path=path)
     loaded = active_band(path)
-    assert loaded.max_surplus == 40.0
+    assert loaded.max_surplus == 24.0
 
 
 def test_player_market_insights_demand_signal():

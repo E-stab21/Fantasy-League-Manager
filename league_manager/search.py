@@ -17,6 +17,7 @@ from typing import Any, Iterable
 from league_manager.slots import normalize_position
 from league_manager.trades import grade_valued_trade
 from league_manager.trade_market import active_band
+from league_manager.leverage import WeekWeights, week_weights
 from league_manager.value import (
     LeagueContext,
     PlayerValue,
@@ -40,14 +41,10 @@ def _band_defaults() -> dict[str, float]:
 
 # Module-level names kept for tests / calibration imports; reflect active band.
 def _refresh_band_constants() -> None:
-    global MIN_SURPLUS, MAX_SURPLUS, MIN_THEIR_FACE, MAX_THEIR_FACE, MIN_THEIR_LT, MAX_THEIR_LT
+    global MIN_SURPLUS, MAX_SURPLUS
     d = _band_defaults()
     MIN_SURPLUS = d["min_surplus"]
     MAX_SURPLUS = d["max_surplus"]
-    MIN_THEIR_FACE = d["min_their_face"]
-    MAX_THEIR_FACE = d["max_their_face"]
-    MIN_THEIR_LT = d["min_their_lt"]
-    MAX_THEIR_LT = d["max_their_lt"]
 
 
 _refresh_band_constants()
@@ -81,7 +78,7 @@ def _candidates(
             continue
         value = valued[player_id]
         rate = value.weekly_rate or weekly_rate(player)
-        if rate < min_weekly and not player.get("is_starter") and value.lt_vorp < 2:
+        if rate < min_weekly and not player.get("is_starter") and value.lt_vorp < 0.3:
             continue
         rows.append(player)
     rows.sort(key=lambda item: valued[item["id"]].blended, reverse=True)
@@ -105,32 +102,24 @@ def _side_summary(players: list[dict[str, Any]], valued: dict[Any, PlayerValue])
     return rows
 
 
-def _package_score(blended: float, their_face_net: float, their_lt_net: float) -> float:
-    """Prefer solid +EV with still-plausible optics; slight lean into surplus.
+def _package_score(blended: float) -> float:
+    """Ranking key: our own surplus, and nothing else.
 
-    Hand-tuned (not fit from accepts). Band filters hard caps; this only ranks.
+    This used to mix in the ESPN face gift to them and their ROS VORP net, which
+    meant the ordering was partly a guess at what they would accept. That guess
+    was wrong in both directions -- it buried every package sending our best
+    player, and it promoted packages handing a third quarterback to a team
+    already carrying two, because face only counts projected points. Face and
+    their-ROS are still reported on every row; deciding what the other manager
+    will take is the manager's call, not the ranker's.
+
+    It is monotonic in `blended` and nothing else, so the returned list reads in
+    plain descending order of what a package is worth to us. The old curve
+    flattened above 12 to stop one absurd smash crowding out realistic
+    packages; `max_surplus` is what holds that line now, and it sits well below
+    where the old knee was.
     """
-    # Sweet spot ~2–12; above that, soft diminishing returns (not a smash magnet).
-    if blended <= 12.0:
-        surplus_part = blended * 1.95
-    else:
-        surplus_part = 23.4 - (blended - 12.0) * 0.25
-
-    # Slight ESPN-face gift to them (0..5) reads as fair / easy to accept.
-    if 0.0 <= their_face_net <= 5.0:
-        face_part = 3.2 - abs(their_face_net - 2.0) * 0.3
-    elif -2.5 <= their_face_net < 0.0:
-        face_part = their_face_net * 0.6
-    else:
-        face_part = -abs(their_face_net - 2.0) * 0.25
-
-    # Their ROS VORP net under our model should stay in a dealable range.
-    if -8.0 <= their_lt_net <= 10.0:
-        ros_part = 2.7 - abs(their_lt_net) * 0.18
-    else:
-        ros_part = -abs(their_lt_net) * 0.12
-
-    return surplus_part + face_part + ros_part
+    return blended
 
 
 def _why(
@@ -165,10 +154,7 @@ def search_trades(
     limit: int = 40,
     min_surplus: float | None = None,
     max_surplus: float | None = None,
-    min_their_face: float | None = None,
-    max_their_face: float | None = None,
-    min_their_lt: float | None = None,
-    max_their_lt: float | None = None,
+    weights: WeekWeights | None = None,
     max_players_per_side: int = MAX_PER_SIDE,
     with_team_id: Any | None = None,
     max_per_opponent: int = MAX_PER_OPPONENT,
@@ -178,17 +164,13 @@ def search_trades(
         min_surplus = band.min_surplus
     if max_surplus is None:
         max_surplus = band.max_surplus
-    if min_their_face is None:
-        min_their_face = band.min_their_face
-    if max_their_face is None:
-        max_their_face = band.max_their_face
-    if min_their_lt is None:
-        min_their_lt = band.min_their_lt
-    if max_their_lt is None:
-        max_their_lt = band.max_their_lt
     resolved = infer_window(context, window)
+    weights = weights or week_weights(context)
+    # Per-week curves depend only on the player, not the package, so build them
+    # once for the whole enumeration instead of per candidate trade.
+    curve_cache: dict[Any, dict[int, float | None]] = {}
     valued = {
-        player_id: value_player(player, context, baselines, window=resolved)
+        player_id: value_player(player, context, baselines, window=resolved, weights=weights)
         for player_id, player in players.items()
     }
     faces = {player_id: espn_face_value(player, context) for player_id, player in players.items()}
@@ -214,6 +196,8 @@ def search_trades(
             window=resolved,
             our_roster=our_team.get("roster") or [],
             baselines=baselines,
+            weights=weights,
+            curve_cache=curve_cache,
         )
         their_face_net = sum(faces[player["id"]] for player in send) - sum(
             faces[player["id"]] for player in recv
@@ -224,11 +208,7 @@ def search_trades(
         )
         if grade["blended"] < min_surplus or grade["blended"] > max_surplus:
             return
-        if their_face_net < min_their_face or their_face_net > max_their_face:
-            return
-        if their_lt_net < min_their_lt or their_lt_net > max_their_lt:
-            return
-        score = _package_score(grade["blended"], their_face_net, their_lt_net)
+        score = _package_score(grade["blended"])
         kept.append(
             {
                 "kind": kind,
@@ -300,10 +280,6 @@ def search_trades(
         "filters": {
             "min_surplus": min_surplus,
             "max_surplus": max_surplus,
-            "min_their_espn_face": min_their_face,
-            "max_their_espn_face": max_their_face,
-            "min_their_ros_vorp": min_their_lt,
-            "max_their_ros_vorp": max_their_lt,
         },
         "trades": picked,
     }

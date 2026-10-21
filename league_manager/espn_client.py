@@ -5,11 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from league_manager.config import Settings
+from league_manager.leverage import ROLE_REGULAR, week_weights
+from league_manager.roster_roles import RoleScorer, assign_roles, role_weight_set
 from league_manager.market import DEFAULT_LOOKBACK, find_opportunities
 from league_manager.projections import league_scoring
 from league_manager.search import parse_kinds, search_trades
 from league_manager.serialize import matchup_to_dict, player_to_dict, team_to_dict
-from league_manager.advise import rank_waiver_claims
+from league_manager.advise import optimal_lineup, rank_waiver_claims
 from league_manager.trades import grade_trade
 from league_manager.value import (
     DEFAULT_SHORT_TERM_WEEKS,
@@ -17,6 +19,7 @@ from league_manager.value import (
     infer_window,
     replacement_baselines,
     value_players,
+    weekly_projection_curve,
 )
 from league_manager.writes import WriteResult, post_transaction
 
@@ -26,6 +29,15 @@ SPORT_IMPORT = {
     "mlb": "espn_api.baseball",
     "nhl": "espn_api.hockey",
 }
+
+# How many free agents to pull when the pool is what sets replacement level.
+# ESPN returns its own order (roughly ownership), not projection order, so a
+# shallow pool can miss the best available player at a position entirely and
+# set the bar too low. Measured: the QB baseline reads 11.52 at 25 agents,
+# 14.87 at 50, 15.19 at 80 and settles at 16.35 from 150 on, swinging the whole
+# roster total from 33.84 to 21.30 on a scale where a trade blend is +/-16.
+# Every command that computes a baseline uses this, so they agree on the bar.
+REPLACEMENT_FA_POOL = 150
 
 
 class EspnClient:
@@ -235,7 +247,7 @@ class EspnClient:
         self,
         extra: list[dict[str, Any]] | None = None,
         *,
-        fa_size: int = 80,
+        fa_size: int = REPLACEMENT_FA_POOL,
     ) -> dict[Any, dict[str, Any]]:
         found = self.rostered_players()
         for player in extra or []:
@@ -254,7 +266,7 @@ class EspnClient:
         window: str = "auto",
         short_term_weeks: int = DEFAULT_SHORT_TERM_WEEKS,
         season_end_week: int | None = None,
-        fa_size: int = 50,
+        fa_size: int = REPLACEMENT_FA_POOL,
         sleeper: bool = True,
     ) -> dict[str, Any]:
         team = self.get_team(team_id)
@@ -281,10 +293,44 @@ class EspnClient:
         )
         baselines = replacement_baselines(free_agents)
         resolved_window = infer_window(context, window)
-        valued = value_players(players, context, baselines, window=resolved_window)
+        weights = week_weights(context)
+        valued = value_players(
+            players, context, baselines, window=resolved_window, weights=weights
+        )
+        curve_cache: dict[Any, dict[int, float | None]] = {}
+
+        def curve_for(player: dict[str, Any]) -> dict[int, float | None]:
+            pid = player.get("id")
+            if pid not in curve_cache:
+                curve_cache[pid], _ = weekly_projection_curve(player, context)
+            return curve_cache[pid]
+
+        scorer = RoleScorer(
+            context, baselines, role_weight_set(weights, context), curve_for=curve_for
+        )
+        roles = assign_roles(
+            players,
+            scorer=scorer,
+            stash_slots=context.stash_slots,
+            stream_slots=context.stream_slots,
+            stash_ratio_threshold=context.stash_ratio_threshold,
+            stream_ratio_threshold=context.stream_ratio_threshold,
+            value_floor=context.role_value_floor,
+        )
+        by_id = {player.get("id"): player for player in players}
+        rows = []
+        for item in valued:
+            row = item.to_dict()
+            role = roles.get(item.id, ROLE_REGULAR)
+            row["role"] = role
+            source = by_id.get(item.id)
+            if source is not None:
+                row["role_value"] = round(scorer.value(source, role), 2)
+            rows.append(row)
         return {
             "team": {"id": roster.get("id"), "name": roster.get("name")},
             "window": resolved_window,
+            "week_weights": weights.to_dict(),
             "sources": self._ros_source_flags(sleeper=sleeper),
             "context": {
                 "current_week": context.current_week,
@@ -295,8 +341,56 @@ class EspnClient:
                 "record": [context.wins, context.losses, context.ties],
             },
             "replacement_weekly": baselines,
-            "players": [item.to_dict() for item in valued],
+            "reserved_slots": {
+                "stash": context.stash_slots,
+                "stream": context.stream_slots,
+            },
+            "players": rows,
         }
+
+    def lineup_advice(
+        self,
+        team_id: int | None = None,
+        *,
+        sleeper: bool = True,
+    ) -> dict[str, Any]:
+        """Recommend a starting lineup for the current week.
+
+        Uses the same enrichment the valuations do, so Sleeper's per-week curve
+        is available. Without it the only injury and bye signal is ESPN's
+        current-week number, and a player on bye falls back to a season average.
+        """
+        team = self.get_team(team_id)
+        context = context_from_league(self.league, team)
+        payload = team_to_dict(team, include_roster=True)
+        players = self._enrich_players(
+            payload.get("roster") or [],
+            current_week=context.current_week,
+            season_end_week=context.season_end_week,
+            sleeper=sleeper,
+        )
+        # Only feeds the gap alerts: an uncovered or below-replacement slot is
+        # worth little without naming who could fill it.
+        free_agents = self._enrich_players(
+            self.free_agents(size=REPLACEMENT_FA_POOL),
+            current_week=context.current_week,
+            season_end_week=context.season_end_week,
+            sleeper=sleeper,
+        )
+        advice = optimal_lineup(
+            players,
+            context=context,
+            free_agents=free_agents,
+            baselines=replacement_baselines(free_agents),
+        )
+        advice["team"] = {"id": payload.get("id"), "name": payload.get("name")}
+        advice["week"] = context.current_week
+        advice["sources"] = {
+            "espn_week": True,
+            "sleeper_week": bool(sleeper),
+            "blend": "average" if sleeper else "espn",
+        }
+        return advice
 
     def waiver_advice(
         self,
@@ -320,7 +414,7 @@ class EspnClient:
         )
         roster_payload = team_to_dict(team, include_roster=True)
         roster = roster_payload.get("roster") or []
-        mixed_fa = self.free_agents(size=max(int(size), 50))
+        mixed_fa = self.free_agents(size=max(int(size), REPLACEMENT_FA_POOL))
         target_fa = self.free_agents(position=position, size=size) if position else mixed_fa
         roster = self._enrich_players(
             roster,
@@ -366,6 +460,7 @@ class EspnClient:
                 "record": [context.wins, context.losses, context.ties],
             },
             "replacement_weekly": baselines,
+            "ir_stash_alerts": ranked.get("ir_stash_alerts", []),
             "targets": ranked["targets"],
         }
 
@@ -378,7 +473,7 @@ class EspnClient:
         window: str = "auto",
         short_term_weeks: int = DEFAULT_SHORT_TERM_WEEKS,
         season_end_week: int | None = None,
-        fa_size: int = 80,
+        fa_size: int = REPLACEMENT_FA_POOL,
         sleeper: bool = True,
     ) -> dict[str, Any]:
         team = self.get_team(team_id)
@@ -428,7 +523,7 @@ class EspnClient:
         season_end_week: int | None = None,
         lookback: int = DEFAULT_LOOKBACK,
         limit: int = 8,
-        fa_size: int = 50,
+        fa_size: int = REPLACEMENT_FA_POOL,
         sleeper: bool = True,
     ) -> dict[str, Any]:
         team = self.get_team(team_id)
@@ -475,7 +570,7 @@ class EspnClient:
         min_surplus: float | None = None,
         max_surplus: float | None = None,
         with_team_id: int | None = None,
-        fa_size: int = 50,
+        fa_size: int = REPLACEMENT_FA_POOL,
         sleeper: bool = True,
     ) -> dict[str, Any]:
         team = self.get_team(team_id)
