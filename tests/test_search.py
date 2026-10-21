@@ -70,7 +70,7 @@ def test_search_keeps_modest_plus_ev_close_face_one_for_one():
     assert top["receive"][0]["ros_source"] == "espn_remainder"
 
 
-def test_search_drops_lopsided_espn_face():
+def test_search_keeps_a_lopsided_espn_face_and_only_reports_it():
     cheap = {
         "id": 1,
         "name": "Streamer",
@@ -99,8 +99,15 @@ def test_search_drops_lopsided_espn_face():
         window="bubble",
         kinds=("1:1",),
     )
+    # A streamer for their WR1 is never getting accepted, and that is the
+    # manager's read to make. Nothing filters on face any more, so the package
+    # survives and carries the (badly negative) face number for them to see.
     assert result["considered"] == 1
-    assert result["trades"] == []
+    assert result["trades"]
+    top = result["trades"][0]
+    assert top["send_ids"] == [1] and top["receive_ids"] == [2]
+    assert top["their_espn_face_net"] < -50
+    assert "ESPN face for them" in top["why"]
 
 
 def test_search_supports_two_for_two():
@@ -167,8 +174,9 @@ def test_search_supports_two_for_two():
     assert set(top["receive_ids"]) == {3, 4}
 
 
-def test_search_drops_smash_spot_even_if_espn_face_is_close():
-    # Same weekly ESPN face, but ROS gap is enormous — managers won't deal.
+def test_search_keeps_a_smash_spot_and_only_reports_their_ros_net():
+    # Same weekly ESPN face, enormous ROS gap. That used to be filtered out as
+    # undealable; judging that is the manager's call, so it is reported instead.
     ours = {
         "id": 1,
         "name": "QB",
@@ -203,7 +211,9 @@ def test_search_drops_smash_spot_even_if_espn_face_is_close():
         window="bubble",
         kinds=("1:1",),
         max_surplus=16.0,
-        min_their_lt=-10.0,
     )
     assert result["considered"] == 1
-    assert result["trades"] == []
+    assert result["trades"]
+    top = result["trades"][0]
+    assert top["their_ros_vorp_net"] < -10  # the gap that used to disqualify it
+    assert top["blended"] <= 16.0  # the one bound that still applies

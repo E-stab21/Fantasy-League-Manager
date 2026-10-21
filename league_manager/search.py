@@ -41,14 +41,10 @@ def _band_defaults() -> dict[str, float]:
 
 # Module-level names kept for tests / calibration imports; reflect active band.
 def _refresh_band_constants() -> None:
-    global MIN_SURPLUS, MAX_SURPLUS, MIN_THEIR_FACE, MAX_THEIR_FACE, MIN_THEIR_LT, MAX_THEIR_LT
+    global MIN_SURPLUS, MAX_SURPLUS
     d = _band_defaults()
     MIN_SURPLUS = d["min_surplus"]
     MAX_SURPLUS = d["max_surplus"]
-    MIN_THEIR_FACE = d["min_their_face"]
-    MAX_THEIR_FACE = d["max_their_face"]
-    MIN_THEIR_LT = d["min_their_lt"]
-    MAX_THEIR_LT = d["max_their_lt"]
 
 
 _refresh_band_constants()
@@ -106,34 +102,23 @@ def _side_summary(players: list[dict[str, Any]], valued: dict[Any, PlayerValue])
     return rows
 
 
-def _package_score(blended: float, their_face_net: float, their_lt_net: float) -> float:
-    """Prefer solid +EV with still-plausible optics; slight lean into surplus.
+def _package_score(blended: float) -> float:
+    """Ranking key: our own surplus, and nothing else.
 
-    Hand-tuned (not fit from accepts). Band filters hard caps; this only ranks.
+    This used to mix in the ESPN face gift to them and their ROS VORP net, which
+    meant the ordering was partly a guess at what they would accept. That guess
+    was wrong in both directions -- it buried every package sending our best
+    player, and it promoted packages handing a third quarterback to a team
+    already carrying two, because face only counts projected points. Face and
+    their-ROS are still reported on every row; deciding what the other manager
+    will take is the manager's call, not the ranker's.
+
+    Above the band's top edge the curve flattens so a single absurd smash does
+    not crowd out a page of realistic packages.
     """
-    # Sweet spot ~2–12; above that, soft diminishing returns (not a smash magnet).
     if blended <= 12.0:
-        surplus_part = blended * 1.95
-    else:
-        surplus_part = 23.4 - (blended - 12.0) * 0.25
-
-    # Slight ESPN-face gift to them (0..5) reads as fair / easy to accept.
-    if 0.0 <= their_face_net <= 5.0:
-        face_part = 3.2 - abs(their_face_net - 2.0) * 0.3
-    elif -2.5 <= their_face_net < 0.0:
-        face_part = their_face_net * 0.6
-    else:
-        face_part = -abs(their_face_net - 2.0) * 0.25
-
-    # Their ROS VORP net under our model should stay in a dealable range. Tuned
-    # to the per-weighted-game scale, where this net spans about +/-14 and the
-    # middle half sits inside -3..+4.
-    if -3.0 <= their_lt_net <= 4.0:
-        ros_part = 2.7 - abs(their_lt_net) * 0.5
-    else:
-        ros_part = -abs(their_lt_net) * 0.35
-
-    return surplus_part + face_part + ros_part
+        return blended * 1.95
+    return 23.4 - (blended - 12.0) * 0.25
 
 
 def _why(
@@ -168,10 +153,6 @@ def search_trades(
     limit: int = 40,
     min_surplus: float | None = None,
     max_surplus: float | None = None,
-    min_their_face: float | None = None,
-    max_their_face: float | None = None,
-    min_their_lt: float | None = None,
-    max_their_lt: float | None = None,
     weights: WeekWeights | None = None,
     max_players_per_side: int = MAX_PER_SIDE,
     with_team_id: Any | None = None,
@@ -182,14 +163,6 @@ def search_trades(
         min_surplus = band.min_surplus
     if max_surplus is None:
         max_surplus = band.max_surplus
-    if min_their_face is None:
-        min_their_face = band.min_their_face
-    if max_their_face is None:
-        max_their_face = band.max_their_face
-    if min_their_lt is None:
-        min_their_lt = band.min_their_lt
-    if max_their_lt is None:
-        max_their_lt = band.max_their_lt
     resolved = infer_window(context, window)
     weights = weights or week_weights(context)
     # Per-week curves depend only on the player, not the package, so build them
@@ -234,11 +207,7 @@ def search_trades(
         )
         if grade["blended"] < min_surplus or grade["blended"] > max_surplus:
             return
-        if their_face_net < min_their_face or their_face_net > max_their_face:
-            return
-        if their_lt_net < min_their_lt or their_lt_net > max_their_lt:
-            return
-        score = _package_score(grade["blended"], their_face_net, their_lt_net)
+        score = _package_score(grade["blended"])
         kept.append(
             {
                 "kind": kind,
@@ -310,10 +279,6 @@ def search_trades(
         "filters": {
             "min_surplus": min_surplus,
             "max_surplus": max_surplus,
-            "min_their_espn_face": min_their_face,
-            "max_their_espn_face": max_their_face,
-            "min_their_ros_vorp": min_their_lt,
-            "max_their_ros_vorp": max_their_lt,
         },
         "trades": picked,
     }
